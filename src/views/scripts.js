@@ -1,31 +1,36 @@
-// Theme Switcher
-function toggleTheme() {
-  const body = document.body;
-  const btn = document.querySelector('.theme-toggle');
-  const currentTheme = body.getAttribute('data-theme');
+// Theme Switcher with event listener
+(function() {
+  const btn = document.getElementById('theme-toggle');
   
-  if (currentTheme === 'dark') {
-    body.removeAttribute('data-theme');
-    localStorage.setItem('theme', 'light');
-    btn.textContent = '🌙';
-  } else {
-    body.setAttribute('data-theme', 'dark');
-    localStorage.setItem('theme', 'dark');
-    btn.textContent = '☀️';
+  function toggleTheme() {
+    const body = document.body;
+    const currentTheme = body.getAttribute('data-theme');
+    
+    if (currentTheme === 'dark') {
+      body.removeAttribute('data-theme');
+      localStorage.setItem('theme', 'light');
+      if (btn) btn.textContent = '🌙';
+    } else {
+      body.setAttribute('data-theme', 'dark');
+      localStorage.setItem('theme', 'dark');
+      if (btn) btn.textContent = '☀️';
+    }
   }
-}
-
-// Load saved theme on page load
-document.addEventListener('DOMContentLoaded', () => {
+  
+  // Attach event listener
+  if (btn) {
+    btn.addEventListener('click', toggleTheme);
+  }
+  
+  // Load saved theme on page load
   const savedTheme = localStorage.getItem('theme');
-  const btn = document.querySelector('.theme-toggle');
   if (savedTheme === 'dark') {
     document.body.setAttribute('data-theme', 'dark');
-    btn.textContent = '☀️';
+    if (btn) btn.textContent = '☀️';
   } else {
-    btn.textContent = '🌙';
+    if (btn) btn.textContent = '🌙';
   }
-});
+})();
 
 // Modal & confirm functions
 function confirmAction(msg, url) {

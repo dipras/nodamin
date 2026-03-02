@@ -4,14 +4,14 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= data.title %> - Nodamin</title>
-  <style><%= data.css %></style>
+  <style><%- data.css %></style>
 </head>
 <body>
   <div class="app">
     <header class="header">
       <a href="/" class="logo">⚡ Nodamin</a>
       <nav class="nav">
-        <button class="theme-toggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
+        <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
       </nav>
     </header>
     <div class="main">
@@ -21,6 +21,6 @@
       <div class="content"><%- data.content %></div>
     </div>
   </div>
-  <script><%= data.js %></script>
+  <script><%- data.js %></script>
 </body>
 </html>

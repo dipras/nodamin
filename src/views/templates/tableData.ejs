@@ -6,6 +6,7 @@
   <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/structure" class="btn">🔧 Structure</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/insert" class="btn btn-primary">+ Insert Row</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export" class="btn">📦 Export</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
 </div>
 <% if (data.rows.length === 0) { %>

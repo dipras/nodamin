@@ -164,3 +164,53 @@ export function errorPage(title: string, message: string, backUrl: string = "/")
   const content = render(compiled.error, { title, message, backUrl });
   return layout(title, content);
 }
+
+export function createTablePage(
+  database: string,
+  tables: { name: string }[],
+  error?: string
+): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
+  const content = render(compiled.createTable, { database, error });
+  return layout(`Create Table - ${database}`, content, sidebar);
+}
+
+export function exportPage(
+  database: string,
+  table: string,
+  dump: string,
+  tables: { name: string }[]
+): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
+  const content = render(compiled.exportTable, { database, table, dump });
+  return layout(`Export - ${table}`, content, sidebar);
+}
+
+export function importPage(
+  database: string,
+  tables: { name: string }[],
+  result?: { message: string },
+  error?: string
+): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
+  const content = render(compiled.importSQL, { database, result, error });
+  return layout(`Import - ${database}`, content, sidebar);
+}

@@ -1,0 +1,31 @@
+<h1>📥 Import SQL</h1>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
+<% if (data.result) { %>
+  <div class="msg msg-success"><%= data.result.message %></div>
+<% } %>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Back to Tables</a>
+</div>
+<div class="card">
+  <h2>Upload SQL File</h2>
+  <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/import" enctype="multipart/form-data">
+    <div class="form-group">
+      <label>SQL File</label>
+      <input type="file" name="sqlfile" accept=".sql" required />
+    </div>
+    <button type="submit" class="btn btn-primary">Upload & Execute</button>
+  </form>
+</div>
+
+<div class="card">
+  <h2>Or Paste SQL</h2>
+  <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/import">
+    <div class="form-group">
+      <label>SQL Statements</label>
+      <textarea name="sql" placeholder="CREATE TABLE...&#10;INSERT INTO..." style="min-height: 200px;" required></textarea>
+    </div>
+    <button type="submit" class="btn btn-primary">Execute SQL</button>
+  </form>
+</div>

@@ -274,3 +274,86 @@ export async function createDatabase(name: string): Promise<QueryResult> {
 export async function dropDatabase(name: string): Promise<QueryResult> {
   return executeQuery(`DROP DATABASE \`${name}\``);
 }
+
+export async function createTable(
+  table: string,
+  columns: { name: string; type: string; nullable: boolean; primary: boolean; autoIncrement: boolean; defaultValue?: string }[]
+): Promise<QueryResult> {
+  const columnDefs = columns.map((col) => {
+    let def = `\`${col.name}\` ${col.type}`;
+    if (!col.nullable) def += " NOT NULL";
+    if (col.autoIncrement) def += " AUTO_INCREMENT";
+    if (col.defaultValue) def += ` DEFAULT ${col.defaultValue}`;
+    return def;
+  });
+
+  const primaryKeys = columns.filter((c) => c.primary).map((c) => c.name);
+  if (primaryKeys.length > 0) {
+    columnDefs.push(`PRIMARY KEY (\`${primaryKeys.join("\`, \`")}\`)`);
+  }
+
+  const sql = `CREATE TABLE \`${table}\` (\n  ${columnDefs.join(",\n  ")}\n)`;
+  console.log("Creating table with SQL:", sql);
+  const result = await executeQuery(sql);
+  console.log("Create table result:", result);
+  return result;
+}
+
+export async function exportTable(table: string): Promise<string> {
+  const p = await getPool();
+  
+  // Get CREATE TABLE statement
+  const [createRows] = await p.query(`SHOW CREATE TABLE \`${table}\``);
+  const createTable = (createRows as any[])[0]["Create Table"];
+  
+  // Get all data
+  const [rows] = await p.query(`SELECT * FROM \`${table}\``);
+  const data = rows as Record<string, unknown>[];
+  
+  let dump = `-- Table: ${table}\n`;
+  dump += `-- Generated: ${new Date().toISOString()}\n\n`;
+  dump += `DROP TABLE IF EXISTS \`${table}\`;\n`;
+  dump += createTable + ";\n\n";
+  
+  if (data.length > 0) {
+    const columns = Object.keys(data[0]!);
+    dump += `INSERT INTO \`${table}\` (\`${columns.join("\`, \`")}\`) VALUES\n`;
+    
+    const values = data.map((row) => {
+      const vals = columns.map((col) => {
+        const val = row[col];
+        if (val === null) return "NULL";
+        if (typeof val === "number") return String(val);
+        return `'${String(val).replace(/'/g, "\\'")}'`;
+      });
+      return `  (${vals.join(", ")})`;
+    });
+    
+    dump += values.join(",\n") + ";\n";
+  }
+  
+  return dump;
+}
+
+export async function importSQL(sql: string): Promise<QueryResult> {
+  const p = await getPool();
+  const statements = sql
+    .split(";")
+    .map((s) => s.trim())
+    .filter((s) => s && !s.startsWith("--"));
+
+  let affectedRows = 0;
+  for (const stmt of statements) {
+    const [result] = await p.query(stmt);
+    if ((result as mysql.ResultSetHeader).affectedRows) {
+      affectedRows += (result as mysql.ResultSetHeader).affectedRows;
+    }
+  }
+
+  return {
+    fields: [],
+    rows: [],
+    affectedRows,
+    message: `Executed ${statements.length} statement(s), affected ${affectedRows} row(s)`,
+  };
+}

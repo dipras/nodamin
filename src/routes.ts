@@ -82,6 +82,91 @@ export function registerRoutes(): void {
     sendHtml(res, 200, views.tableListPage(dbName, tables));
   });
 
+  // ---- Create Table (must be before generic /db/:db/table/:table) ----
+
+  get("/db/:db/table/create", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+    const tables = await db.listTables();
+    sendHtml(res, 200, views.createTablePage(dbName, tables));
+  });
+
+  post("/db/:db/table/create", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+
+    const tableName = ctx.body["tableName"] as string;
+    const colNames = Array.isArray(ctx.body["colName[]"]) ? ctx.body["colName[]"] : [ctx.body["colName[]"]];
+    const colTypes = Array.isArray(ctx.body["colType[]"]) ? ctx.body["colType[]"] : [ctx.body["colType[]"]];
+    const colLengths = Array.isArray(ctx.body["colLength[]"]) ? ctx.body["colLength[]"] : [ctx.body["colLength[]"]];
+    const colPrimary = ctx.body["colPrimary[]"] ? (Array.isArray(ctx.body["colPrimary[]"]) ? ctx.body["colPrimary[]"] : [ctx.body["colPrimary[]"]]) : [];
+    const colNullable = ctx.body["colNullable[]"] ? (Array.isArray(ctx.body["colNullable[]"]) ? ctx.body["colNullable[]"] : [ctx.body["colNullable[]"]]) : [];
+    const colAutoInc = ctx.body["colAutoInc[]"] ? (Array.isArray(ctx.body["colAutoInc[]"]) ? ctx.body["colAutoInc[]"] : [ctx.body["colAutoInc[]"]]) : [];
+    const colDefault = ctx.body["colDefault[]"] ? (Array.isArray(ctx.body["colDefault[]"]) ? ctx.body["colDefault[]"] : [ctx.body["colDefault[]"]]) : [];
+
+    const columns = (colNames as string[]).map((name, i) => {
+      const baseType = (colTypes as string[])[i]!;
+      const length = (colLengths as string[])[i];
+      // Combine type with length if length provided
+      const fullType = length && length.trim() ? `${baseType}(${length})` : baseType;
+      
+      const col: any = {
+        name,
+        type: fullType,
+        nullable: (colNullable as string[]).includes(String(i)),
+        primary: (colPrimary as string[]).includes(String(i)),
+        autoIncrement: (colAutoInc as string[]).includes(String(i)),
+      };
+      const defVal = (colDefault as string[])[i];
+      if (defVal && defVal.trim() !== '') {
+        col.defaultValue = defVal;
+      }
+      return col;
+    });
+
+    console.log("Creating table:", tableName, "with columns:", JSON.stringify(columns, null, 2));
+
+    try {
+      await db.createTable(tableName, columns);
+      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(tableName)}`);
+    } catch (err: unknown) {
+      console.error("Failed to create table:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.createTablePage(dbName, tables, msg));
+    }
+  });
+
+  // ---- Import SQL (must be before generic /db/:db/table/:table) ----
+
+  get("/db/:db/import", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+    const tables = await db.listTables();
+    sendHtml(res, 200, views.importPage(dbName, tables));
+  });
+
+  post("/db/:db/import", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+
+    const sql = ctx.body["sql"] as string;
+    
+    try {
+      const result = await db.importSQL(sql);
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.importPage(dbName, tables, { message: result.message || 'Import successful' }));
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : String(err);
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.importPage(dbName, tables, undefined, msg));
+    }
+  });
+
   // ---- Table operations ----
 
   get("/db/:db/table/:table", async (ctx: RouteContext, res: ServerResponse) => {
@@ -285,5 +370,29 @@ export function registerRoutes(): void {
       db.listTables()
     ]);
     sendHtml(res, 200, views.sqlPage(dbName, tables, result, sql));
+  });
+
+  // ---- Export Table ----
+
+  get("/db/:db/table/:table/export", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    const table = ctx.params["table"]!;
+    db.setCurrentDatabase(dbName);
+
+    const dump = await db.exportTable(table);
+
+    // If download param exists, send as file
+    if (ctx.query["download"]) {
+      res.writeHead(200, {
+        "Content-Type": "application/sql",
+        "Content-Disposition": `attachment; filename="${table}.sql"`,
+      });
+      res.end(dump);
+      return;
+    }
+
+    const tables = await db.listTables();
+    sendHtml(res, 200, views.exportPage(dbName, table, dump, tables));
   });
 }

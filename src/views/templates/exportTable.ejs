@@ -1,0 +1,24 @@
+<h1>📦 Export Table: <%= data.table %></h1>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Back to Table</a>
+</div>
+<div class="card">
+  <h2>SQL Dump</h2>
+  <p style="color: var(--text2); font-size: 13px; margin-bottom: 12px;">
+    Copy the SQL dump below or download as file
+  </p>
+  <textarea readonly style="width: 100%; min-height: 400px; font-family: 'Cascadia Code', 'Fira Code', monospace; font-size: 12px;"><%= data.dump %></textarea>
+  <div style="margin-top: 12px;">
+    <button class="btn btn-primary" onclick="copyDump()">📋 Copy to Clipboard</button>
+    <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export?download=1" class="btn" download="<%= data.table %>.sql">💾 Download File</a>
+  </div>
+</div>
+
+<script>
+function copyDump() {
+  const textarea = document.querySelector('textarea');
+  textarea.select();
+  document.execCommand('copy');
+  alert('SQL dump copied to clipboard!');
+}
+</script>

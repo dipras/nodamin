@@ -1,0 +1,151 @@
+<h1>🔨 Create Table</h1>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Back to Tables</a>
+</div>
+<div class="card">
+  <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/create">
+    <div class="form-group">
+      <label>Table Name</label>
+      <input type="text" name="tableName" required placeholder="users" />
+    </div>
+    
+    <h3 style="margin: 20px 0 12px 0; font-size: 14px;">Columns</h3>
+    <div id="columns">
+      <div class="column-row" style="display: grid; grid-template-columns: 2fr 1.5fr 1fr 80px 80px 80px 120px 40px; gap: 8px; margin-bottom: 8px; align-items: end;">
+        <div class="form-group" style="margin: 0;">
+          <label>Name</label>
+          <input type="text" name="colName[]" placeholder="id" required />
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label>Type</label>
+          <select name="colType[]" required onchange="toggleLength(this)">
+            <option value="INT">INT</option>
+            <option value="BIGINT">BIGINT</option>
+            <option value="TINYINT">TINYINT</option>
+            <option value="SMALLINT">SMALLINT</option>
+            <option value="MEDIUMINT">MEDIUMINT</option>
+            <option value="VARCHAR">VARCHAR</option>
+            <option value="CHAR">CHAR</option>
+            <option value="TEXT">TEXT</option>
+            <option value="LONGTEXT">LONGTEXT</option>
+            <option value="MEDIUMTEXT">MEDIUMTEXT</option>
+            <option value="TINYTEXT">TINYTEXT</option>
+            <option value="DATE">DATE</option>
+            <option value="DATETIME">DATETIME</option>
+            <option value="TIMESTAMP">TIMESTAMP</option>
+            <option value="TIME">TIME</option>
+            <option value="YEAR">YEAR</option>
+            <option value="DECIMAL">DECIMAL</option>
+            <option value="FLOAT">FLOAT</option>
+            <option value="DOUBLE">DOUBLE</option>
+            <option value="BOOLEAN">BOOLEAN</option>
+            <option value="ENUM">ENUM</option>
+            <option value="JSON">JSON</option>
+            <option value="BLOB">BLOB</option>
+          </select>
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label>Length</label>
+          <input type="text" name="colLength[]" placeholder="11" class="length-input" />
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="display: block; margin-bottom: 8px;">Primary</label>
+          <input type="checkbox" name="colPrimary[]" value="0" style="width: auto; height: 18px;" />
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="display: block; margin-bottom: 8px;">Nullable</label>
+          <input type="checkbox" name="colNullable[]" value="0" style="width: auto; height: 18px;" />
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label style="display: block; margin-bottom: 8px;">Auto Inc</label>
+          <input type="checkbox" name="colAutoInc[]" value="0" style="width: auto; height: 18px;" />
+        </div>
+        <div class="form-group" style="margin: 0;">
+          <label>Default</label>
+          <input type="text" name="colDefault[]" placeholder="NULL" />
+        </div>
+        <div></div>
+      </div>
+    </div>
+    
+    <div style="margin-top: 12px;">
+      <button type="button" class="btn" onclick="addColumn()">+ Add Column</button>
+    </div>
+    
+    <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid var(--border);">
+      <button type="submit" class="btn btn-primary">Create Table</button>
+    </div>
+  </form>
+</div>
+
+<script>
+let columnIndex = 0;
+function addColumn() {
+  columnIndex++;
+  const container = document.getElementById('columns');
+  const div = document.createElement('div');
+  div.className = 'column-row';
+  div.style.cssText = 'display: grid; grid-template-columns: 2fr 1.5fr 1fr 80px 80px 80px 120px 40px; gap: 8px; margin-bottom: 8px; align-items: end;';
+  div.innerHTML = `
+    <input type="text" name="colName[]" placeholder="column_name" required />
+    <select name="colType[]" required onchange="toggleLength(this)">
+      <option value="INT">INT</option>
+      <option value="BIGINT">BIGINT</option>
+      <option value="TINYINT">TINYINT</option>
+      <option value="SMALLINT">SMALLINT</option>
+      <option value="MEDIUMINT">MEDIUMINT</option>
+      <option value="VARCHAR" selected>VARCHAR</option>
+      <option value="CHAR">CHAR</option>
+      <option value="TEXT">TEXT</option>
+      <option value="LONGTEXT">LONGTEXT</option>
+      <option value="MEDIUMTEXT">MEDIUMTEXT</option>
+      <option value="TINYTEXT">TINYTEXT</option>
+      <option value="DATE">DATE</option>
+      <option value="DATETIME">DATETIME</option>
+      <option value="TIMESTAMP">TIMESTAMP</option>
+      <option value="TIME">TIME</option>
+      <option value="YEAR">YEAR</option>
+      <option value="DECIMAL">DECIMAL</option>
+      <option value="FLOAT">FLOAT</option>
+      <option value="DOUBLE">DOUBLE</option>
+      <option value="BOOLEAN">BOOLEAN</option>
+      <option value="ENUM">ENUM</option>
+      <option value="JSON">JSON</option>
+      <option value="BLOB">BLOB</option>
+    </select>
+    <input type="text" name="colLength[]" placeholder="255" class="length-input" />
+    <input type="checkbox" name="colPrimary[]" value="${columnIndex}" style="width: auto; height: 18px;" />
+    <input type="checkbox" name="colNullable[]" value="${columnIndex}" style="width: auto; height: 18px;" checked />
+    <input type="checkbox" name="colAutoInc[]" value="${columnIndex}" style="width: auto; height: 18px;" />
+    <input type="text" name="colDefault[]" placeholder="NULL" />
+    <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">×</button>
+  `;
+  container.appendChild(div);
+}
+
+function toggleLength(select) {
+  const row = select.closest('.column-row');
+  const lengthInput = row.querySelector('.length-input');
+  const type = select.value;
+  
+  // Types that don't need length
+  const noLengthTypes = ['TEXT', 'LONGTEXT', 'MEDIUMTEXT', 'TINYTEXT', 'DATE', 'DATETIME', 'TIMESTAMP', 'TIME', 'YEAR', 'JSON', 'BLOB', 'BOOLEAN'];
+  
+  if (noLengthTypes.includes(type)) {
+    lengthInput.value = '';
+    lengthInput.disabled = true;
+    lengthInput.style.opacity = '0.5';
+  } else {
+    lengthInput.disabled = false;
+    lengthInput.style.opacity = '1';
+  }
+}
+
+// Initialize length inputs on page load
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('select[name="colType[]"]').forEach(toggleLength);
+});
+</script>

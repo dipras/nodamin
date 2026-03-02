@@ -94,11 +94,16 @@ export function registerRoutes(): void {
     const sort = ctx.query["sort"];
     const order = ctx.query["order"];
 
-    const data = await db.getTableData(table, page, 50, sort, order);
+    const [data, columns] = await Promise.all([
+      db.getTableData(table, page, 50, sort, order),
+      db.getTableStructure(table)
+    ]);
+    const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
+    
     sendHtml(
       res,
       200,
-      views.tableDataPage(dbName, table, data.fields, data.rows, data.total, page, 50, sort, order)
+      views.tableDataPage(dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys, sort, order)
     );
   });
 

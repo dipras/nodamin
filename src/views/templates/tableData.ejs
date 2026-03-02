@@ -29,7 +29,10 @@
         </thead>
         <tbody>
           <% data.rows.forEach(function(row, i) {
-            const whereParams = data.fields.map(f => encodeURIComponent(f) + '=' + encodeURIComponent(String(row[f] ?? ''))).join('&');
+            // Build WHERE clause using primary keys only (more efficient)
+            const whereParams = data.primaryKeys.length > 0
+              ? data.primaryKeys.map(pk => encodeURIComponent(pk) + '=' + encodeURIComponent(String(row[pk] ?? ''))).join('&')
+              : data.fields.map(f => encodeURIComponent(f) + '=' + encodeURIComponent(String(row[f] ?? ''))).join('&'); // fallback to all columns if no PK
             const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
           %>
             <tr>

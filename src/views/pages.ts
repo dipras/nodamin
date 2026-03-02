@@ -63,6 +63,7 @@ export function tableDataPage(
   total: number,
   page: number,
   perPage: number,
+  primaryKeys: string[],
   sort?: string,
   order?: string,
   message?: string
@@ -75,6 +76,7 @@ export function tableDataPage(
     total,
     page,
     perPage,
+    primaryKeys,
     sort,
     order,
     message,

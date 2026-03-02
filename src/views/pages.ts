@@ -41,7 +41,8 @@ export function databaseListPage(
 export function tableListPage(
   database: string,
   tables: { name: string; engine: string; rows: number; size: string; collation: string }[],
-  message?: string
+  message?: string,
+  error?: string
 ): string {
   const sidebar = render(compiled.sidebar, {
     title: "Tables",
@@ -51,7 +52,7 @@ export function tableListPage(
     })),
   });
 
-  const content = render(compiled.tableList, { database, tables, message });
+  const content = render(compiled.tableList, { database, tables, message, error });
   return layout(database, content, sidebar);
 }
 
@@ -66,7 +67,8 @@ export function tableDataPage(
   primaryKeys: string[],
   sort?: string,
   order?: string,
-  message?: string
+  message?: string,
+  error?: string
 ): string {
   const content = render(compiled.tableData, {
     database,
@@ -80,6 +82,7 @@ export function tableDataPage(
     sort,
     order,
     message,
+    error,
   });
   return layout(`${table} - ${database}`, content);
 }

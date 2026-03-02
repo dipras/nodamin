@@ -2,6 +2,9 @@
 <% if (data.message) { %>
   <div class="msg msg-success"><%= data.message %></div>
 <% } %>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
 <div class="actions">
   <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/structure" class="btn">🔧 Structure</a>

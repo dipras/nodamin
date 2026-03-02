@@ -317,8 +317,22 @@ export function registerRoutes(): void {
     db.setCurrentDatabase(dbName);
 
     const where: Record<string, unknown> = { ...ctx.query };
-    await db.deleteRow(table, where);
-    redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+    try {
+      await db.deleteRow(table, where);
+      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const page = Number(ctx.query["page"]) || 1;
+      const [data, columns] = await Promise.all([
+        db.getTableData(table, page, 50),
+        db.getTableStructure(table)
+      ]);
+      const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
+      sendHtml(res, 200, views.tableDataPage(
+        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
+        undefined, undefined, undefined, errorMsg
+      ));
+    }
   });
 
   get("/db/:db/table/:table/drop", async (ctx: RouteContext, res: ServerResponse) => {
@@ -326,8 +340,14 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
-    await db.dropTable(table);
-    redirect(res, `/db/${encodeURIComponent(dbName)}`);
+    try {
+      await db.dropTable(table);
+      redirect(res, `/db/${encodeURIComponent(dbName)}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.tableListPage(dbName, tables, undefined, errorMsg));
+    }
   });
 
   get("/db/:db/table/:table/truncate", async (ctx: RouteContext, res: ServerResponse) => {
@@ -335,8 +355,22 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
-    await db.truncateTable(table);
-    redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+    try {
+      await db.truncateTable(table);
+      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+    } catch (err: unknown) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const page = 1;
+      const [data, columns] = await Promise.all([
+        db.getTableData(table, page, 50),
+        db.getTableStructure(table)
+      ]);
+      const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
+      sendHtml(res, 200, views.tableDataPage(
+        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
+        undefined, undefined, undefined, errorMsg
+      ));
+    }
   });
 
   // ---- Bulk Actions for Tables ----
@@ -381,7 +415,10 @@ export function registerRoutes(): void {
         return;
       }
     } catch (err: unknown) {
-      console.error("Bulk action failed:", err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const tablesList = await db.listTables();
+      sendHtml(res, 200, views.tableListPage(dbName, tablesList, undefined, errorMsg));
+      return;
     }
 
     redirect(res, `/db/${encodeURIComponent(dbName)}`);
@@ -409,8 +446,14 @@ export function registerRoutes(): void {
     const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
 
     if (primaryKeys.length === 0) {
-      console.warn("No primary keys found, cannot bulk delete");
-      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+      const page = Number(ctx.query["page"]) || 1;
+      const [data] = await Promise.all([
+        db.getTableData(table, page, 50)
+      ]);
+      sendHtml(res, 200, views.tableDataPage(
+        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
+        undefined, undefined, undefined, "No primary keys found, cannot bulk delete"
+      ));
       return;
     }
 
@@ -427,7 +470,16 @@ export function registerRoutes(): void {
         await db.deleteRow(table, where);
       }
     } catch (err: unknown) {
-      console.error("Bulk delete failed:", err);
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      const page = Number(ctx.query["page"]) || 1;
+      const [data] = await Promise.all([
+        db.getTableData(table, page, 50)
+      ]);
+      sendHtml(res, 200, views.tableDataPage(
+        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
+        undefined, undefined, undefined, errorMsg
+      ));
+      return;
     }
 
     redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);

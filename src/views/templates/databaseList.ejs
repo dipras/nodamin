@@ -1,0 +1,35 @@
+<h1>📦 Databases</h1>
+<% if (data.message) { %>
+  <div class="msg msg-success"><%= data.message %></div>
+<% } %>
+<div class="actions">
+  <button class="btn btn-primary" onclick="showModal('createDb')">+ Create Database</button>
+  <a href="/disconnect" class="btn btn-danger">Disconnect</a>
+  <a href="/sql" class="btn">📝 SQL Query</a>
+</div>
+<div class="grid-2">
+  <% data.databases.forEach(function(db) { %>
+    <div class="stat">
+      <div class="label"><a href="/db/<%= encodeURIComponent(db) %>"><%= db %></a></div>
+      <div style="display:flex;gap:8px;margin-top:8px;">
+        <a href="/db/<%= encodeURIComponent(db) %>" class="btn btn-sm">Open</a>
+        <button class="btn btn-sm btn-danger" onclick="confirmAction('Drop database <%= db %>?', '/db/<%= encodeURIComponent(db) %>/drop')">Drop</button>
+      </div>
+    </div>
+  <% }); %>
+</div>
+<div class="modal-overlay" id="createDb">
+  <div class="modal">
+    <h2>Create Database</h2>
+    <form method="POST" action="/db/create">
+      <div class="form-group">
+        <label>Database Name</label>
+        <input type="text" name="name" style="width:100%" required autofocus>
+      </div>
+      <div class="modal-actions">
+        <button type="button" class="btn" onclick="hideModal('createDb')">Cancel</button>
+        <button type="submit" class="btn btn-primary">Create</button>
+      </div>
+    </form>
+  </div>
+</div>

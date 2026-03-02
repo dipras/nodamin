@@ -1,0 +1,54 @@
+{
+  "name": "nodamin",
+  "version": "1.0.0",
+  "description": "Lightweight Database Admin for Node.js",
+  "keywords": [
+    "database",
+    "database-admin",
+    "db-admin",
+    "mysql",
+    "mysql-admin",
+    "mysql-gui",
+    "mysql-web",
+    "nodejs",
+    "node",
+    "sql",
+    "web-admin",
+    "admin-panel",
+    "database-manager",
+    "multi-database",
+    "db-gui"
+  ],
+  "homepage": "https://github.com/dipras/nodamin#readme",
+  "bugs": {
+    "url": "https://github.com/dipras/nodamin/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dipras/nodamin.git"
+  },
+  "license": "GPL-2.0-only",
+  "author": "Dipras",
+  "type": "module",
+  "main": "dist/nodamin.js",
+  "bin": {
+    "nodamin": "dist/nodamin.js"
+  },
+  "scripts": {
+    "build:templates": "node build-templates.js",
+    "build": "npm run build:templates && node esbuild.config.js",
+    "start": "node dist/nodamin.js",
+    "dev": "npm run build:templates && tsc --noEmit --watch & node --watch-path=src esbuild.config.js --dev",
+    "typecheck": "npm run build:templates && tsc --noEmit"
+  },
+  "dependencies": {
+    "@types/node": "^25.3.3",
+    "mysql2": "^3.18.2",
+    "typescript": "^5.9.3"
+  },
+  "devDependencies": {
+    "@types/ejs": "^3.1.5",
+    "ejs": "^4.0.1",
+    "esbuild": "^0.27.3"
+  }
+}

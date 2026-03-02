@@ -1,0 +1,21 @@
+<h1>➕ Insert into <%= data.table %></h1>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Back</a>
+</div>
+<div class="card">
+  <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/insert">
+    <% data.columns.filter(c => !c.extra.includes('auto_increment')).forEach(function(c) { %>
+      <div class="form-group">
+        <label><%= c.name %> <code><%= c.type %></code> <%= c.nullable ? '(nullable)' : '' %></label>
+        <input type="text" name="<%= c.name %>" style="width:100%" placeholder="<%= c.defaultValue !== null ? String(c.defaultValue) : (c.nullable ? 'NULL' : '') %>">
+      </div>
+    <% }); %>
+    <div class="modal-actions">
+      <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">Cancel</a>
+      <button type="submit" class="btn btn-primary">Insert</button>
+    </div>
+  </form>
+</div>

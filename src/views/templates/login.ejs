@@ -1,0 +1,35 @@
+<div style="max-width:440px;margin:60px auto;">
+  <div class="card">
+    <h2>🔌 Connect to Database</h2>
+    <% if (data.error) { %>
+      <div class="msg msg-error"><%= data.error %></div>
+    <% } %>
+    <form method="POST" action="/connect">
+      <div class="form-group">
+        <label>Database Type</label>
+        <select name="type" style="width:100%">
+          <option value="mysql">MySQL</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Host</label>
+          <input type="text" name="host" value="localhost" style="width:100%" required>
+        </div>
+        <div class="form-group">
+          <label>Port</label>
+          <input type="number" name="port" value="3306" style="width:100%" required>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>Username</label>
+        <input type="text" name="user" value="root" style="width:100%" required>
+      </div>
+      <div class="form-group">
+        <label>Password</label>
+        <input type="password" name="password" style="width:100%">
+      </div>
+      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;">Connect</button>
+    </form>
+  </div>
+</div>

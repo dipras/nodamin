@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title><%= data.title %> - Nodamin</title>
+  <style><%= data.css %></style>
+</head>
+<body>
+  <div class="app">
+    <header class="header">
+      <a href="/" class="logo">⚡ Nodamin</a>
+      <nav class="nav" id="nav"></nav>
+    </header>
+    <div class="main">
+      <% if (data.sidebar) { %>
+        <aside class="sidebar"><%- data.sidebar %></aside>
+      <% } %>
+      <div class="content"><%- data.content %></div>
+    </div>
+  </div>
+  <script><%= data.js %></script>
+</body>
+</html>

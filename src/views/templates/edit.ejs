@@ -1,0 +1,22 @@
+<h1>✏️ Edit row in <%= data.table %></h1>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Back</a>
+</div>
+<div class="card">
+  <% const whereParams = Object.entries(data.row).map(([k, v]) => encodeURIComponent(k) + '=' + encodeURIComponent(String(v ?? ''))).join('&'); %>
+  <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/update?<%= whereParams %>">
+    <% data.columns.forEach(function(c) { %>
+      <div class="form-group">
+        <label><%= c.name %> <code><%= c.type %></code></label>
+        <input type="text" name="<%= c.name %>" value="<%= data.row[c.name] !== null && data.row[c.name] !== undefined ? String(data.row[c.name]) : '' %>" style="width:100%"<%= c.extra.includes('auto_increment') ? ' readonly' : '' %>>
+      </div>
+    <% }); %>
+    <div class="modal-actions">
+      <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">Cancel</a>
+      <button type="submit" class="btn btn-primary">Update</button>
+    </div>
+  </form>
+</div>

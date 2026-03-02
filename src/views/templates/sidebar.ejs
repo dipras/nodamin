@@ -1,0 +1,4 @@
+<h3><%= data.title %> (<%= data.items.length %>)</h3>
+<% data.items.forEach(function(item) { %>
+  <a href="<%= item.href %>"><%= item.name %></a>
+<% }); %>

@@ -1,0 +1,36 @@
+<h1>🔧 Structure: <%= data.table %></h1>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Data</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
+</div>
+<div class="card" style="padding:0;overflow:hidden;">
+  <table>
+    <thead>
+      <tr>
+        <th>Column</th>
+        <th>Type</th>
+        <th>Nullable</th>
+        <th>Key</th>
+        <th>Default</th>
+        <th>Extra</th>
+      </tr>
+    </thead>
+    <tbody>
+      <% data.columns.forEach(function(c) { 
+        let keyBadge = '';
+        if (c.key === 'PRI') keyBadge = '<span class="badge badge-pri">PRI</span>';
+        else if (c.key === 'UNI') keyBadge = '<span class="badge badge-uni">UNI</span>';
+        else if (c.key === 'MUL') keyBadge = '<span class="badge badge-mul">MUL</span>';
+      %>
+        <tr>
+          <td><strong><%= c.name %></strong></td>
+          <td><code><%= c.type %></code></td>
+          <td><%= c.nullable ? 'Yes' : 'No' %></td>
+          <td><%- keyBadge %></td>
+          <td><% if (c.defaultValue === null) { %><span class="null">NULL</span><% } else { %><%= String(c.defaultValue) %><% } %></td>
+          <td><%= c.extra %></td>
+        </tr>
+      <% }); %>
+    </tbody>
+  </table>
+</div>

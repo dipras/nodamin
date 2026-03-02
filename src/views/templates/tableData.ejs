@@ -1,0 +1,71 @@
+<h1>📋 <%= data.table %></h1>
+<% if (data.message) { %>
+  <div class="msg msg-success"><%= data.message %></div>
+<% } %>
+<div class="actions">
+  <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/structure" class="btn">🔧 Structure</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/insert" class="btn btn-primary">+ Insert Row</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
+</div>
+<% if (data.rows.length === 0) { %>
+  <div class="empty">No data in this table</div>
+<% } else { %>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <% data.fields.forEach(function(f) { 
+              const newOrder = data.sort === f && data.order === 'asc' ? 'desc' : 'asc';
+              const sortUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table) + '?page=' + data.page + '&sort=' + encodeURIComponent(f) + '&order=' + newOrder;
+              const sortIcon = data.sort === f ? (data.order === 'asc' ? ' ↑' : ' ↓') : '';
+            %>
+              <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
+            <% }); %>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <% data.rows.forEach(function(row, i) {
+            const whereParams = data.fields.map(f => encodeURIComponent(f) + '=' + encodeURIComponent(String(row[f] ?? ''))).join('&');
+            const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
+          %>
+            <tr>
+              <td><%= (data.page - 1) * data.perPage + i + 1 %></td>
+              <% data.fields.forEach(function(f) { %>
+                <td><% if (row[f] === null) { %><span class="null">NULL</span><% } else { %><%= String(row[f]) %><% } %></td>
+              <% }); %>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <a href="<%= baseUrl %>/edit?<%= whereParams %>" class="btn btn-sm">Edit</a>
+                  <button class="btn btn-sm btn-danger" onclick="confirmAction('Delete this row?', '<%= baseUrl %>/delete?<%= whereParams %>')">Del</button>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="pagination">
+    <div class="info">Showing <%= (data.page - 1) * data.perPage + 1 %>-<%= Math.min(data.page * data.perPage, data.total) %> of <%= data.total.toLocaleString() %> rows</div>
+    <div style="display:flex;gap:4px;">
+      <% 
+        const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
+        const totalPages = Math.ceil(data.total / data.perPage);
+        const sortParams = data.sort ? '&sort=' + data.sort + '&order=' + data.order : '';
+      %>
+      <% if (data.page > 1) { %>
+        <a href="<%= baseUrl %>?page=<%= data.page - 1 %><%= sortParams %>" class="btn btn-sm">← Prev</a>
+      <% } %>
+      <% for (let p = 1; p <= Math.min(totalPages, 10); p++) { %>
+        <a href="<%= baseUrl %>?page=<%= p %><%= sortParams %>" class="btn btn-sm<%= p === data.page ? ' btn-primary' : '' %>"><%= p %></a>
+      <% } %>
+      <% if (data.page < totalPages) { %>
+        <a href="<%= baseUrl %>?page=<%= data.page + 1 %><%= sortParams %>" class="btn btn-sm">Next →</a>
+      <% } %>
+    </div>
+  </div>
+<% } %>

@@ -9,6 +9,7 @@
   <a href="/" class="btn">← Databases</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/create" class="btn btn-primary">+ Create Table</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/import" class="btn">📥 Import SQL</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/export" class="btn">📦 Export Database</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
 </div>
 <% if (data.tables.length === 0) { %>

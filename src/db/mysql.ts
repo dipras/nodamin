@@ -357,3 +357,22 @@ export async function importSQL(sql: string): Promise<QueryResult> {
     message: `Executed ${statements.length} statement(s), affected ${affectedRows} row(s)`,
   };
 }
+
+export async function exportDatabase(): Promise<string> {
+  const p = await getPool();
+  if (!currentDatabase) throw new Error("No database selected");
+
+  let dump = `-- Database: ${currentDatabase}\n`;
+  dump += `-- Generated: ${new Date().toISOString()}\n\n`;
+  dump += `CREATE DATABASE IF NOT EXISTS \`${currentDatabase}\`;\n`;
+  dump += `USE \`${currentDatabase}\`;\n\n`;
+
+  const tables = await listTables();
+  
+  for (const table of tables) {
+    const tableDump = await exportTable(table.name);
+    dump += tableDump + "\n\n";
+  }
+
+  return dump;
+}

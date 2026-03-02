@@ -6,6 +6,7 @@ import type { ServerResponse } from "node:http";
 import { get, post, sendHtml, redirect } from "./router.js";
 import * as db from "./db/mysql.js";
 import * as views from "./views/pages.js";
+import { FAVICON_BASE64 } from "./views/assets.js";
 import type { RouteContext } from "./types.js";
 
 // Helper to check if connected to database
@@ -18,6 +19,19 @@ function requireConnection(res: ServerResponse): boolean {
 }
 
 export function registerRoutes(): void {
+  // ---- Static Assets ----
+
+  get("/favicon.ico", async (_ctx: RouteContext, res: ServerResponse) => {
+    if (FAVICON_BASE64) {
+      const buffer = Buffer.from(FAVICON_BASE64, "base64");
+      res.writeHead(200, { "Content-Type": "image/x-icon", "Cache-Control": "public, max-age=86400" });
+      res.end(buffer);
+    } else {
+      res.writeHead(404);
+      res.end();
+    }
+  });
+
   // ---- Connection ----
 
   get("/", async (_ctx: RouteContext, res: ServerResponse) => {
@@ -540,5 +554,21 @@ export function registerRoutes(): void {
 
     const tables = await db.listTables();
     sendHtml(res, 200, views.exportPage(dbName, table, dump, tables));
+  });
+
+  // ---- Export Database ----
+
+  get("/db/:db/export", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+
+    const dump = await db.exportDatabase();
+
+    res.writeHead(200, {
+      "Content-Type": "application/sql",
+      "Content-Disposition": `attachment; filename="${dbName}_full_export.sql"`,
+    });
+    res.end(dump);
   });
 }

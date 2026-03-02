@@ -1,5 +1,7 @@
 # ⚡ Nodamin
 
+![Nodamin](featured.png)
+
 **Lightweight Database Admin for Node.js** — A single-file Adminer alternative powered by Node.js and TypeScript.
 
 Nodamin adalah web-based database administration tool yang terinspirasi dari [Adminer](https://www.adminer.org/). Dibuat dengan Node.js, TypeScript, dan dikemas menjadi **single JavaScript file** yang siap pakai tanpa dependencies eksternal saat runtime.
@@ -8,13 +10,15 @@ Nodamin adalah web-based database administration tool yang terinspirasi dari [Ad
 
 - 🚀 **Single File Distribution** - Build menghasilkan 1 file JS yang portable (~1MB)
 - 🔌 **Multiple Database Support** - MySQL (tersedia), PostgreSQL, SQLite, MongoDB (planned)
-- 🎨 **Simple & Clean UI** - Dark theme, fokus pada fungsionalitas
+- 🎨 **Simple & Clean UI** - Light/Dark theme dengan toggle
 - 📦 **Zero Runtime Dependencies** - Semua embedded dalam bundle
 - ⚙️ **Custom Port** - Konfigurasi port via CLI atau environment variable
 - 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, drop
 - 📝 **SQL Query Editor** - Execute raw SQL dengan result viewer
 - 📊 **Table Browser** - Pagination, sorting, dan quick actions
 - 🔍 **Database Explorer** - Browse databases, tables, dan structure
+- 📦 **Export/Import** - Export database/table to SQL, import SQL files
+- ✅ **Bulk Actions** - Select multiple tables/rows for bulk operations
 
 ## 🚀 Quick Start
 
@@ -86,6 +90,14 @@ src/
 - ✅ Insert, Edit, Delete rows
 - ✅ Drop & Truncate tables
 - ✅ Raw SQL query editor with result display
+- ✅ Create table with GUI (column types, constraints)
+- ✅ Export table to SQL dump
+- ✅ Export entire database to SQL dump
+- ✅ Import SQL files
+- ✅ Bulk actions for tables (drop, truncate, export multiple)
+- ✅ Bulk delete for rows
+- ✅ Light/Dark theme toggle with localStorage persistence
+- ✅ Error handling with user-friendly messages
 
 ## 🗺️ Roadmap
 
@@ -100,15 +112,17 @@ src/
 - [ ] **Redis** - Key-value store browser
 
 ### Features
-- [ ] **Export** - Export table/query results to CSV, JSON, SQL dump
-- [ ] **Import** - Import SQL files
-- [ ] **Table creation** - Create table with GUI (columns, types, constraints)
+- [x] **Export** - Export table/query results to SQL dump ✅
+- [x] **Import** - Import SQL files ✅
+- [x] **Table creation** - Create table with GUI (columns, types, constraints) ✅
+- [x] **Dark/Light theme toggle** ✅
+- [x] **Bulk actions** - Select and operate on multiple tables/rows ✅
 - [ ] **Alter table** - Add/modify/drop columns via GUI
 - [ ] **Index management** - Create/drop indexes
 - [ ] **Foreign key viewer** - View and manage foreign key relationships
+- [ ] **Export to CSV/JSON** - Additional export formats
 - [ ] **Query history** - Save and recall previous SQL queries
 - [ ] **Multiple connections** - Save and switch between database connections
-- [ ] **Dark/Light theme toggle**
 - [ ] **Keyboard shortcuts** - Quick navigation
 - [ ] **Query autocomplete** - Basic SQL autocomplete in query editor
 - [ ] **Table search/filter** - Filter tables in sidebar

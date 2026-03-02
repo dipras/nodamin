@@ -12,47 +12,59 @@
 <% if (data.rows.length === 0) { %>
   <div class="empty">No data in this table</div>
 <% } else { %>
-  <div class="card" style="padding:0;overflow:hidden;">
-    <div class="table-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th>#</th>
-            <% data.fields.forEach(function(f) { 
-              const newOrder = data.sort === f && data.order === 'asc' ? 'desc' : 'asc';
-              const sortUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table) + '?page=' + data.page + '&sort=' + encodeURIComponent(f) + '&order=' + newOrder;
-              const sortIcon = data.sort === f ? (data.order === 'asc' ? ' ↑' : ' ↓') : '';
-            %>
-              <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
-            <% }); %>
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          <% data.rows.forEach(function(row, i) {
-            // Build WHERE clause using primary keys only (more efficient)
-            const whereParams = data.primaryKeys.length > 0
-              ? data.primaryKeys.map(pk => encodeURIComponent(pk) + '=' + encodeURIComponent(String(row[pk] ?? ''))).join('&')
-              : data.fields.map(f => encodeURIComponent(f) + '=' + encodeURIComponent(String(row[f] ?? ''))).join('&'); // fallback to all columns if no PK
-            const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
-          %>
-            <tr>
-              <td><%= (data.page - 1) * data.perPage + i + 1 %></td>
-              <% data.fields.forEach(function(f) { %>
-                <td><% if (row[f] === null) { %><span class="null">NULL</span><% } else { %><%= String(row[f]) %><% } %></td>
-              <% }); %>
-              <td>
-                <div style="display:flex;gap:4px;">
-                  <a href="<%= baseUrl %>/edit?<%= whereParams %>" class="btn btn-sm">Edit</a>
-                  <button class="btn btn-sm btn-danger" onclick="confirmAction('Delete this row?', '<%= baseUrl %>/delete?<%= whereParams %>')">Del</button>
-                </div>
-              </td>
-            </tr>
-          <% }); %>
-        </tbody>
-      </table>
+  <form id="bulkForm" method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/bulk-delete">
+    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+      <span style="font-size: 13px; color: var(--text2);">With selected:</span>
+      <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">❌ Delete</button>
+      <span id="selectedCount" style="font-size: 13px; color: var(--text2); margin-left: auto;"></span>
     </div>
-  </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this)" style="width: auto; height: 18px;" /></th>
+              <th>#</th>
+              <% data.fields.forEach(function(f) { 
+                const newOrder = data.sort === f && data.order === 'asc' ? 'desc' : 'asc';
+                const sortUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table) + '?page=' + data.page + '&sort=' + encodeURIComponent(f) + '&order=' + newOrder;
+                const sortIcon = data.sort === f ? (data.order === 'asc' ? ' ↑' : ' ↓') : '';
+              %>
+                <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
+              <% }); %>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <% data.rows.forEach(function(row, i) {
+              // Build WHERE clause using primary keys only (more efficient)
+              const whereParams = data.primaryKeys.length > 0
+                ? data.primaryKeys.map(pk => encodeURIComponent(pk) + '=' + encodeURIComponent(String(row[pk] ?? ''))).join('&')
+                : data.fields.map(f => encodeURIComponent(f) + '=' + encodeURIComponent(String(row[f] ?? ''))).join('&'); // fallback to all columns if no PK
+              const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
+              const rowId = data.primaryKeys.length > 0
+                ? data.primaryKeys.map(pk => String(row[pk] ?? '')).join('|')
+                : data.fields.map(f => String(row[f] ?? '')).join('|'); // fallback identifier
+            %>
+              <tr>
+                <td><input type="checkbox" name="rows[]" value="<%= rowId %>" onchange="updateCount()" class="row-check" style="width: auto; height: 18px;" /></td>
+                <td><%= (data.page - 1) * data.perPage + i + 1 %></td>
+                <% data.fields.forEach(function(f) { %>
+                  <td><% if (row[f] === null) { %><span class="null">NULL</span><% } else { %><%= String(row[f]) %><% } %></td>
+                <% }); %>
+                <td>
+                  <div style="display:flex;gap:4px;">
+                    <a href="<%= baseUrl %>/edit?<%= whereParams %>" class="btn btn-sm">Edit</a>
+                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmAction('Delete this row?', '<%= baseUrl %>/delete?<%= whereParams %>')">Del</button>
+                  </div>
+                </td>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </form>
   <div class="pagination">
     <div class="info">Showing <%= (data.page - 1) * data.perPage + 1 %>-<%= Math.min(data.page * data.perPage, data.total) %> of <%= data.total.toLocaleString() %> rows</div>
     <div style="display:flex;gap:4px;">
@@ -72,4 +84,30 @@
       <% } %>
     </div>
   </div>
+
+<script>
+function toggleAll(checkbox) {
+  document.querySelectorAll('.row-check').forEach(cb => cb.checked = checkbox.checked);
+  updateCount();
+}
+
+function updateCount() {
+  const checked = document.querySelectorAll('.row-check:checked').length;
+  const total = document.querySelectorAll('.row-check').length;
+  document.getElementById('selectedCount').textContent = checked > 0 ? `${checked} of ${total} selected` : '';
+  document.getElementById('selectAll').checked = checked === total && total > 0;
+}
+
+function bulkDelete() {
+  const checked = document.querySelectorAll('.row-check:checked');
+  if (checked.length === 0) {
+    alert('Please select at least one row');
+    return;
+  }
+  
+  if (confirm(`Delete ${checked.length} selected row(s)?`)) {
+    document.getElementById('bulkForm').submit();
+  }
+}
+</script>
 <% } %>

@@ -339,6 +339,100 @@ export function registerRoutes(): void {
     redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
   });
 
+  // ---- Bulk Actions for Tables ----
+
+  post("/db/:db/tables/bulk", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    db.setCurrentDatabase(dbName);
+
+    const action = ctx.body["action"] as string;
+    const tables = Array.isArray(ctx.body["tables[]"]) 
+      ? ctx.body["tables[]"] as string[] 
+      : [ctx.body["tables[]"] as string];
+
+    if (!tables || tables.length === 0) {
+      redirect(res, `/db/${encodeURIComponent(dbName)}`);
+      return;
+    }
+
+    try {
+      if (action === "drop") {
+        for (const table of tables) {
+          await db.dropTable(table);
+        }
+      } else if (action === "truncate") {
+        for (const table of tables) {
+          await db.truncateTable(table);
+        }
+      } else if (action === "export") {
+        // Generate combined SQL dump
+        let combinedDump = "";
+        for (const table of tables) {
+          const dump = await db.exportTable(table);
+          combinedDump += dump + "\n\n";
+        }
+        
+        res.writeHead(200, {
+          "Content-Type": "application/sql",
+          "Content-Disposition": `attachment; filename="${dbName}_export.sql"`,
+        });
+        res.end(combinedDump);
+        return;
+      }
+    } catch (err: unknown) {
+      console.error("Bulk action failed:", err);
+    }
+
+    redirect(res, `/db/${encodeURIComponent(dbName)}`);
+  });
+
+  // ---- Bulk Delete for Rows ----
+
+  post("/db/:db/table/:table/bulk-delete", async (ctx: RouteContext, res: ServerResponse) => {
+    if (!requireConnection(res)) return;
+    const dbName = ctx.params["db"]!;
+    const table = ctx.params["table"]!;
+    db.setCurrentDatabase(dbName);
+
+    const rowIds = Array.isArray(ctx.body["rows[]"]) 
+      ? ctx.body["rows[]"] as string[] 
+      : [ctx.body["rows[]"] as string];
+
+    if (!rowIds || rowIds.length === 0) {
+      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+      return;
+    }
+
+    // Get primary keys
+    const columns = await db.getTableStructure(table);
+    const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
+
+    if (primaryKeys.length === 0) {
+      console.warn("No primary keys found, cannot bulk delete");
+      redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+      return;
+    }
+
+    try {
+      // Each rowId is a pipe-separated string of primary key values
+      for (const rowId of rowIds) {
+        const values = rowId.split('|');
+        const where: Record<string, unknown> = {};
+        
+        primaryKeys.forEach((pk, i) => {
+          where[pk] = values[i];
+        });
+
+        await db.deleteRow(table, where);
+      }
+    } catch (err: unknown) {
+      console.error("Bulk delete failed:", err);
+    }
+
+    redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
+  });
+
   // ---- SQL Query ----
 
   get("/sql", async (_ctx: RouteContext, res: ServerResponse) => {

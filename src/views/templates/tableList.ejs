@@ -11,36 +11,87 @@
 <% if (data.tables.length === 0) { %>
   <div class="empty">No tables found in this database</div>
 <% } else { %>
-  <div class="card" style="padding:0;overflow:hidden;">
-    <table>
-      <thead>
-        <tr>
-          <th>Table</th>
-          <th>Engine</th>
-          <th>Rows</th>
-          <th>Size</th>
-          <th>Collation</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody>
-        <% data.tables.forEach(function(t) { %>
+  <form id="bulkForm" method="POST" action="/db/<%= encodeURIComponent(data.database) %>/tables/bulk">
+    <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
+      <span style="font-size: 13px; color: var(--text2);">With selected:</span>
+      <button type="button" class="btn btn-sm" onclick="bulkAction('export')">📦 Export</button>
+      <button type="button" class="btn btn-sm" onclick="bulkAction('truncate')" style="color:var(--warning);">🗑️ Truncate</button>
+      <button type="button" class="btn btn-sm btn-danger" onclick="bulkAction('drop')">❌ Drop</button>
+      <span id="selectedCount" style="font-size: 13px; color: var(--text2); margin-left: auto;"></span>
+    </div>
+    <div class="card" style="padding:0;overflow:hidden;">
+      <table>
+        <thead>
           <tr>
-            <td><a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>"><%= t.name %></a></td>
-            <td><%= t.engine %></td>
-            <td><%= t.rows.toLocaleString() %></td>
-            <td><%= t.size %></td>
-            <td><code><%= t.collation %></code></td>
-            <td>
-              <div style="display:flex;gap:4px;">
-                <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/structure" class="btn btn-sm">Structure</a>
-                <button class="btn btn-sm btn-danger" onclick="confirmAction('Drop table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop')">Drop</button>
-                <button class="btn btn-sm" onclick="confirmAction('Truncate table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate')" style="color:var(--warning);">Truncate</button>
-              </div>
-            </td>
+            <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this)" style="width: auto; height: 18px;" /></th>
+            <th>Table</th>
+            <th>Engine</th>
+            <th>Rows</th>
+            <th>Size</th>
+            <th>Collation</th>
+            <th>Actions</th>
           </tr>
-        <% }); %>
-      </tbody>
-    </table>
-  </div>
+        </thead>
+        <tbody>
+          <% data.tables.forEach(function(t) { %>
+            <tr>
+              <td><input type="checkbox" name="tables[]" value="<%= t.name %>" onchange="updateCount()" class="table-check" style="width: auto; height: 18px;" /></td>
+              <td><a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>"><%= t.name %></a></td>
+              <td><%= t.engine %></td>
+              <td><%= t.rows.toLocaleString() %></td>
+              <td><%= t.size %></td>
+              <td><code><%= t.collation %></code></td>
+              <td>
+                <div style="display:flex;gap:4px;">
+                  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/structure" class="btn btn-sm">Structure</a>
+                  <button type="button" class="btn btn-sm btn-danger" onclick="confirmAction('Drop table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop')">Drop</button>
+                  <button type="button" class="btn btn-sm" onclick="confirmAction('Truncate table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate')" style="color:var(--warning);">Truncate</button>
+                </div>
+              </td>
+            </tr>
+          <% }); %>
+        </tbody>
+      </table>
+    </div>
+    <input type="hidden" name="action" id="bulkAction" />
+  </form>
 <% } %>
+
+<script>
+function toggleAll(checkbox) {
+  document.querySelectorAll('.table-check').forEach(cb => cb.checked = checkbox.checked);
+  updateCount();
+}
+
+function updateCount() {
+  const checked = document.querySelectorAll('.table-check:checked').length;
+  const total = document.querySelectorAll('.table-check').length;
+  document.getElementById('selectedCount').textContent = checked > 0 ? `${checked} of ${total} selected` : '';
+  document.getElementById('selectAll').checked = checked === total && total > 0;
+}
+
+function bulkAction(action) {
+  const checked = document.querySelectorAll('.table-check:checked');
+  if (checked.length === 0) {
+    alert('Please select at least one table');
+    return;
+  }
+  
+  const tableNames = Array.from(checked).map(cb => cb.value).join(', ');
+  let msg = '';
+  if (action === 'drop') {
+    msg = `Drop ${checked.length} table(s): ${tableNames}?`;
+  } else if (action === 'truncate') {
+    msg = `Truncate ${checked.length} table(s): ${tableNames}?`;
+  } else if (action === 'export') {
+    document.getElementById('bulkAction').value = 'export';
+    document.getElementById('bulkForm').submit();
+    return;
+  }
+  
+  if (confirm(msg)) {
+    document.getElementById('bulkAction').value = action;
+    document.getElementById('bulkForm').submit();
+  }
+}
+</script>

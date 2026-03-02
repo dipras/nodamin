@@ -1,3 +1,4 @@
 node_modules
 src/views/compiled.ts
+src/views/assets.ts
 dist

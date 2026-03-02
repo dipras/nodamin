@@ -3,11 +3,7 @@
 // ============================================================
 
 import * as compiled from "./compiled.js";
-import { readFileSync } from "node:fs";
-import { fileURLToPath } from "node:url";
-import { dirname, join } from "node:path";
-
-const __dirname = dirname(fileURLToPath(import.meta.url));
+import { CSS, JS } from "./assets.js";
 
 // Wrapper to call EJS compiled functions (they expect 4 params: data, escapeFn, include, rethrow)
 function render(fn: Function, data: any): string {
@@ -15,15 +11,7 @@ function render(fn: Function, data: any): string {
 }
 
 function layout(title: string, content: string, sidebar: string = ""): string {
-  return render(compiled.layout, { title, content, sidebar, css: css(), js: js() });
-}
-
-function css(): string {
-  return readFileSync(join(__dirname, "styles.css"), "utf-8");
-}
-
-function js(): string {
-  return readFileSync(join(__dirname, "scripts.js"), "utf-8");
+  return render(compiled.layout, { title, content, sidebar, css: CSS, js: JS });
 }
 
 // ---- Page Renderers ----

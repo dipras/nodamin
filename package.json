@@ -36,10 +36,11 @@
   },
   "scripts": {
     "build:templates": "node build-templates.js",
-    "build": "npm run build:templates && node esbuild.config.js",
+    "build:assets": "node build-assets.js",
+    "build": "npm run build:templates && npm run build:assets && node esbuild.config.js",
     "start": "node dist/nodamin.js",
-    "dev": "npm run build:templates && tsc --noEmit --watch & node --watch-path=src esbuild.config.js --dev",
-    "typecheck": "npm run build:templates && tsc --noEmit"
+    "dev": "npm run build:templates && npm run build:assets && tsc --noEmit --watch & node --watch-path=src esbuild.config.js --dev",
+    "typecheck": "npm run build:templates && npm run build:assets && tsc --noEmit"
   },
   "dependencies": {
     "@types/node": "^25.3.3",

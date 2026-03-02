@@ -87,20 +87,36 @@ export function tableDataPage(
 export function tableStructurePage(
   database: string,
   table: string,
-  columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[]
+  columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
+  tables: { name: string }[]
 ): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
   const content = render(compiled.tableStructure, { database, table, columns });
-  return layout(`Structure: ${table}`, content);
+  return layout(`Structure: ${table}`, content, sidebar);
 }
 
 export function insertPage(
   database: string,
   table: string,
   columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
+  tables: { name: string }[],
   error?: string
 ): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
   const content = render(compiled.insert, { database, table, columns, error });
-  return layout(`Insert - ${table}`, content);
+  return layout(`Insert - ${table}`, content, sidebar);
 }
 
 export function editPage(
@@ -108,14 +124,23 @@ export function editPage(
   table: string,
   columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
   row: Record<string, unknown>,
+  tables: { name: string }[],
   error?: string
 ): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
   const content = render(compiled.edit, { database, table, columns, row, error });
-  return layout(`Edit - ${table}`, content);
+  return layout(`Edit - ${table}`, content, sidebar);
 }
 
 export function sqlPage(
   database: string | null,
+  tables: { name: string }[],
   result?: {
     fields: { name: string }[];
     rows: Record<string, unknown>[];
@@ -124,8 +149,15 @@ export function sqlPage(
   },
   sql?: string
 ): string {
+  const sidebar = database ? render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  }) : "";
   const content = render(compiled.sql, { database, result, sql });
-  return layout("SQL Query", content);
+  return layout("SQL Query", content, sidebar);
 }
 
 export function errorPage(title: string, message: string, backUrl: string = "/"): string {

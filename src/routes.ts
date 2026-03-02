@@ -112,8 +112,11 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
-    const columns = await db.getTableStructure(table);
-    sendHtml(res, 200, views.tableStructurePage(dbName, table, columns));
+    const [columns, tables] = await Promise.all([
+      db.getTableStructure(table),
+      db.listTables()
+    ]);
+    sendHtml(res, 200, views.tableStructurePage(dbName, table, columns, tables));
   });
 
   get("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
@@ -121,8 +124,11 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
-    const columns = await db.getTableStructure(table);
-    sendHtml(res, 200, views.insertPage(dbName, table, columns));
+    const [columns, tables] = await Promise.all([
+      db.getTableStructure(table),
+      db.listTables()
+    ]);
+    sendHtml(res, 200, views.insertPage(dbName, table, columns, tables));
   });
 
   post("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
@@ -148,7 +154,8 @@ export function registerRoutes(): void {
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      sendHtml(res, 200, views.insertPage(dbName, table, columns, msg));
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.insertPage(dbName, table, columns, tables, msg));
     }
   });
 
@@ -158,7 +165,10 @@ export function registerRoutes(): void {
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
 
-    const columns = await db.getTableStructure(table);
+    const [columns, tables] = await Promise.all([
+      db.getTableStructure(table),
+      db.listTables()
+    ]);
     // Build WHERE from query params
     const where = { ...ctx.query };
     delete where["page"];
@@ -178,7 +188,7 @@ export function registerRoutes(): void {
       return;
     }
 
-    sendHtml(res, 200, views.editPage(dbName, table, columns, result.rows[0]!));
+    sendHtml(res, 200, views.editPage(dbName, table, columns, result.rows[0]!, tables));
   });
 
   post("/db/:db/table/:table/update", async (ctx: RouteContext, res: ServerResponse) => {
@@ -210,7 +220,8 @@ export function registerRoutes(): void {
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      sendHtml(res, 200, views.editPage(dbName, table, columns, ctx.body as Record<string, unknown>, msg));
+      const tables = await db.listTables();
+      sendHtml(res, 200, views.editPage(dbName, table, columns, ctx.body as Record<string, unknown>, tables, msg));
     }
   });
 
@@ -246,21 +257,22 @@ export function registerRoutes(): void {
   // ---- SQL Query ----
 
   get("/sql", async (_ctx: RouteContext, res: ServerResponse) => {
-    sendHtml(res, 200, views.sqlPage(null));
+    sendHtml(res, 200, views.sqlPage(null, []));
   });
 
   post("/sql", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(res)) return;
     const sql = (ctx.body["sql"] as string) ?? "";
     const result = await db.executeQuery(sql);
-    sendHtml(res, 200, views.sqlPage(null, result, sql));
+    sendHtml(res, 200, views.sqlPage(null, [], result, sql));
   });
 
   get("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(res)) return;
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(dbName);
-    sendHtml(res, 200, views.sqlPage(dbName));
+    const tables = await db.listTables();
+    sendHtml(res, 200, views.sqlPage(dbName, tables));
   });
 
   post("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
@@ -268,7 +280,10 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(dbName);
     const sql = (ctx.body["sql"] as string) ?? "";
-    const result = await db.executeQuery(sql);
-    sendHtml(res, 200, views.sqlPage(dbName, result, sql));
+    const [result, tables] = await Promise.all([
+      db.executeQuery(sql),
+      db.listTables()
+    ]);
+    sendHtml(res, 200, views.sqlPage(dbName, tables, result, sql));
   });
 }

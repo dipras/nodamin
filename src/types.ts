@@ -17,6 +17,7 @@ export interface DbConnection {
 
 export interface ServerConfig {
   port: number;
+  host?: string;
 }
 
 export interface QueryResult {

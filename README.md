@@ -12,7 +12,7 @@ Nodamin adalah web-based database administration tool yang terinspirasi dari [Ad
 - 🔌 **Multiple Database Support** - MySQL & SQLite (tersedia), PostgreSQL, MongoDB (planned)
 - 🎨 **Simple & Clean UI** - Light/Dark theme dengan toggle
 - 📦 **Zero Runtime Dependencies** - Semua embedded dalam bundle
-- ⚙️ **Custom Port** - Konfigurasi port via CLI atau environment variable
+- ⚙️ **Custom Host & Port** - Konfigurasi binding port dan host via CLI atau environment variable
 - 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, drop
 - 📝 **SQL Query Editor** - Execute raw SQL dengan result viewer
 - 📊 **Table Browser** - Pagination, sorting, dan quick actions
@@ -42,14 +42,14 @@ npm run build
 # Run dengan default port (3088)
 npm start
 
-# Run dengan custom port
-node dist/nodamin.js --port 8080
+# Run dengan custom port dan host
+node dist/nodamin.js --port 8080 --host 127.0.0.1
 
 # Atau dengan environment variable
-NODAMIN_PORT=9000 node dist/nodamin.js
+NODAMIN_HOST=0.0.0.0 NODAMIN_PORT=9000 node dist/nodamin.js
 ```
 
-Buka browser ke `http://localhost:3088` dan connect ke database MySQL atau SQLite kamu.
+Buka browser ke URL yang ditampilkan pada log (default: `http://localhost:3088`) dan connect ke database MySQL atau SQLite kamu.
 
 📝 **Catatan untuk SQLite**:
 - Kamu bisa mengunggah file `.db` yang sudah ada via UI.

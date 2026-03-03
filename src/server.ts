@@ -15,10 +15,12 @@ export function startServer(config: ServerConfig): void {
     });
   });
 
-  server.listen(config.port, () => {
+  const hostInfo = config.host || "0.0.0.0";
+  server.listen(config.port, hostInfo, () => {
     console.log("");
     console.log("  ⚡ Nodamin is running!");
-    console.log(`  🌐 http://localhost:${config.port}`);
+    const displayHost = hostInfo === "0.0.0.0" || hostInfo === "::" ? "localhost" : hostInfo;
+    console.log(`  🌐 http://${displayHost}:${config.port}`);
     console.log("");
     console.log("  Press Ctrl+C to stop");
     console.log("");

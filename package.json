@@ -1,5 +1,5 @@
 {
-  "name": "nodamin",
+  "name": "@dipras/nodamin",
   "version": "1.0.0",
   "description": "Lightweight Database Admin for Node.js",
   "keywords": [
@@ -20,6 +20,9 @@
     "database-manager",
     "multi-database",
     "db-gui"
+  ],
+  "files": [
+    "dist"
   ],
   "homepage": "https://github.com/dipras/nodamin#readme",
   "bugs": {

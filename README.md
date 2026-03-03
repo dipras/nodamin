@@ -2,27 +2,39 @@
 
 ![Nodamin](featured.png)
 
-**Lightweight Database Admin for Node.js** — A single-file Adminer alternative powered by Node.js and TypeScript.
+**Lightweight Database Admin for Node.js** — A single-process Adminer alternative powered by Node.js and TypeScript.
 
-Nodamin adalah web-based database administration tool yang terinspirasi dari [Adminer](https://www.adminer.org/). Dibuat dengan Node.js, TypeScript, dan dikemas menjadi **single JavaScript file** yang siap pakai tanpa dependencies eksternal saat runtime.
+Nodamin is a web-based database administration tool inspired by [Adminer](https://www.adminer.org/). Built with Node.js and TypeScript, it is compiled into a highly portable package that requires zero external configuration to run.
 
 ## ✨ Features
 
-- 🚀 **Single File Distribution** - Build menghasilkan 1 file JS yang portable (~1MB)
-- 🔌 **Multiple Database Support** - MySQL & SQLite (tersedia), PostgreSQL, MongoDB (planned)
-- 🎨 **Simple & Clean UI** - Light/Dark theme dengan toggle
-- 📦 **Zero Runtime Dependencies** - Semua embedded dalam bundle
-- ⚙️ **Custom Host & Port** - Konfigurasi binding port dan host via CLI atau environment variable
-- 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, drop
-- 📝 **SQL Query Editor** - Execute raw SQL dengan result viewer
-- 📊 **Table Browser** - Pagination, sorting, dan quick actions
-- 🔍 **Database Explorer** - Browse databases, tables, dan structure
-- 📦 **Export/Import** - Export database/table to SQL, import SQL files
-- ✅ **Bulk Actions** - Select multiple tables/rows for bulk operations
+- 🚀 **Zero Configuration** - Instantly run via `npx` with no setup required.
+- 🔌 **Multiple Database Support** - MySQL & SQLite (Available), PostgreSQL, MongoDB (Planned)
+- 🎨 **Simple & Clean UI** - Toggle between Light and Dark themes.
+- ⚙️ **Custom Host & Port** - Configure binding ports and hosts via CLI or environment variables.
+- 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, and drop tables/rows.
+- 📝 **SQL Query Editor** - Execute raw SQL with an interactive result viewer.
+- 📊 **Table Browser** - Discover tables with pagination, sorting, and quick actions.
+- 🔍 **Database Explorer** - Browse databases, tables, and structures easily.
+- 📦 **Export/Import** - Export database/table to SQL dumps, or import existing SQL files.
+- ✅ **Bulk Actions** - Select multiple tables/rows for bulk operations.
 
 ## 🚀 Quick Start
 
-### Installation
+The fastest and easiest way to use Nodamin is via `npx` (requires Node.js):
+
+```bash
+# Automatically download & run via npx
+npx @dipras/nodamin
+
+# Run with a custom port and host
+npx @dipras/nodamin --port 8080 --host 127.0.0.1
+```
+
+Open your browser to the URL displayed in your terminal (default: `http://localhost:3088`) and connect to your MySQL or SQLite database.
+
+<details>
+<summary><b>🛠️ Install from Source (Manual)</b></summary>
 
 ```bash
 # Clone repository
@@ -32,28 +44,31 @@ cd nodamin
 # Install dependencies
 npm install
 
-# Build single file
+# Build the distribution file
 npm run build
-```
 
-### Usage
-
-```bash
-# Run dengan default port (3088)
+# Run
 npm start
-
-# Run dengan custom port dan host
-node dist/nodamin.js --port 8080 --host 127.0.0.1
-
-# Atau dengan environment variable
-NODAMIN_HOST=0.0.0.0 NODAMIN_PORT=9000 node dist/nodamin.js
 ```
+</details>
 
-Buka browser ke URL yang ditampilkan pada log (default: `http://localhost:3088`) dan connect ke database MySQL atau SQLite kamu.
+📝 **Notes for SQLite**:
+- You can upload an existing `.db` file directly via the UI.
+- Selecting the **Create New** option will provision a temporary **In-Memory** database (data is lost upon server restart). This is perfect for quick testing and prototyping.
 
-📝 **Catatan untuk SQLite**:
-- Kamu bisa mengunggah file `.db` yang sudah ada via UI.
-- Memilih opsi **Create New** akan membuat database In-Memory sementara (data hilang saat server restart), cocok untuk testing cepat.
+## 🛠️ Configuration & CLI Variables
+
+Nodamin can be configured using CLI arguments or Environment Variables:
+
+| CLI Argument | Environment Variable | Default | Description |
+| :--- | :--- | :--- | :--- |
+| `--port <number>` | `NODAMIN_PORT` | `3088` | Port for the web interface. |
+| `--host <string>` | `NODAMIN_HOST` | `0.0.0.0` | IP Address/Host to bind the server to. |
+
+**Example using Environment Variables:**
+```bash
+NODAMIN_HOST=127.0.0.1 NODAMIN_PORT=9000 npx @dipras/nodamin
+```
 
 ## 🛠️ Development
 
@@ -64,7 +79,7 @@ npm run typecheck
 # Build single file (production)
 npm run build
 
-# Development mode dengan watch
+# Development mode with watch
 npm run dev
 ```
 
@@ -105,8 +120,6 @@ src/
 
 ## 🗺️ Roadmap
 
-## 🗺️ Roadmap
-
 ### Database Drivers
 - [ ] **PostgreSQL** - Second priority after MySQL
 - [x] **SQLite** - File-based & In-Memory database support ✅
@@ -134,9 +147,9 @@ src/
 - [ ] **Stored procedures/functions** - View and execute
 - [ ] **User/privileges management** - Manage database users
 - [ ] **ERD viewer** - Visual entity relationship diagram
-- [ ] **Connection via URL** - Support connection string format (e.g., `mysql://user:pass@host:port/db`)
+- [x] **Connection via URL** - Support connection string format (e.g., `mysql://user:pass@host:port/db`)
 - [ ] **Authentication** - Optional login to protect the admin panel
-- [ ] **npx support** - Run directly with `npx nodamin`
+- [x] **npx support** - Run directly with `npx @dipras/nodamin`
 
 ## 📝 License
 

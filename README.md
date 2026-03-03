@@ -9,7 +9,7 @@ Nodamin adalah web-based database administration tool yang terinspirasi dari [Ad
 ## ✨ Features
 
 - 🚀 **Single File Distribution** - Build menghasilkan 1 file JS yang portable (~1MB)
-- 🔌 **Multiple Database Support** - MySQL (tersedia), PostgreSQL, SQLite, MongoDB (planned)
+- 🔌 **Multiple Database Support** - MySQL & SQLite (tersedia), PostgreSQL, MongoDB (planned)
 - 🎨 **Simple & Clean UI** - Light/Dark theme dengan toggle
 - 📦 **Zero Runtime Dependencies** - Semua embedded dalam bundle
 - ⚙️ **Custom Port** - Konfigurasi port via CLI atau environment variable
@@ -49,7 +49,11 @@ node dist/nodamin.js --port 8080
 NODAMIN_PORT=9000 node dist/nodamin.js
 ```
 
-Buka browser ke `http://localhost:3088` dan connect ke database MySQL kamu.
+Buka browser ke `http://localhost:3088` dan connect ke database MySQL atau SQLite kamu.
+
+📝 **Catatan untuk SQLite**:
+- Kamu bisa mengunggah file `.db` yang sudah ada via UI.
+- Memilih opsi **Create New** akan membuat database In-Memory sementara (data hilang saat server restart), cocok untuk testing cepat.
 
 ## 🛠️ Development
 
@@ -105,7 +109,7 @@ src/
 
 ### Database Drivers
 - [ ] **PostgreSQL** - Second priority after MySQL
-- [ ] **SQLite** - File-based database support
+- [x] **SQLite** - File-based & In-Memory database support ✅
 - [ ] **MariaDB** - Should be easy since it's MySQL-compatible
 - [ ] **MongoDB** - NoSQL support with collection/document view
 - [ ] **Microsoft SQL Server** - Enterprise database support

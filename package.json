@@ -10,6 +10,8 @@
     "mysql-admin",
     "mysql-gui",
     "mysql-web",
+    "sqlite",
+    "sqlite-admin",
     "nodejs",
     "node",
     "sql",
@@ -43,12 +45,16 @@
     "typecheck": "npm run build:templates && npm run build:assets && tsc --noEmit"
   },
   "dependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.3",
+    "better-sqlite3": "^12.6.2",
+    "formidable": "^3.5.4",
     "mysql2": "^3.18.2",
     "typescript": "^5.9.3"
   },
   "devDependencies": {
     "@types/ejs": "^3.1.5",
+    "@types/formidable": "^3.4.7",
     "ejs": "^4.0.1",
     "esbuild": "^0.27.3"
   }

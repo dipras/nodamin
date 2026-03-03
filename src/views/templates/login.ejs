@@ -2,34 +2,143 @@
   <div class="card">
     <h2>🔌 Connect to Database</h2>
     <% if (data.error) { %>
-      <div class="msg msg-error"><%= data.error %></div>
-    <% } %>
-    <form method="POST" action="/connect">
-      <div class="form-group">
-        <label>Database Type</label>
-        <select name="type" style="width:100%">
-          <option value="mysql">MySQL</option>
-        </select>
+      <div class="msg msg-error">
+        <%= data.error %>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>Host</label>
-          <input type="text" name="host" value="localhost" style="width:100%" required>
-        </div>
-        <div class="form-group">
-          <label>Port</label>
-          <input type="number" name="port" value="3306" style="width:100%" required>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>Username</label>
-        <input type="text" name="user" value="root" style="width:100%" required>
-      </div>
-      <div class="form-group">
-        <label>Password</label>
-        <input type="password" name="password" style="width:100%">
-      </div>
-      <button type="submit" class="btn btn-primary" style="width:100%;justify-content:center;margin-top:8px;">Connect</button>
-    </form>
+      <% } %>
+        <form method="POST" action="/connect" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>Database Type</label>
+            <select name="type" id="dbType" style="width:100%" onchange="toggleDbFields()">
+              <option value="mysql">MySQL</option>
+              <option value="sqlite">SQLite</option>
+            </select>
+          </div>
+
+          <!-- MySQL fields -->
+          <div id="mysqlFields">
+            <div class="form-row">
+              <div class="form-group">
+                <label>Host</label>
+                <input type="text" name="host" value="localhost" style="width:100%">
+              </div>
+              <div class="form-group">
+                <label>Port</label>
+                <input type="number" name="port" value="3306" style="width:100%">
+              </div>
+            </div>
+            <div class="form-group">
+              <label>Username</label>
+              <input type="text" name="user" value="root" style="width:100%">
+            </div>
+            <div class="form-group">
+              <label>Password</label>
+              <input type="password" name="password" style="width:100%">
+            </div>
+          </div>
+
+          <!-- SQLite fields -->
+          <div id="sqliteFields" style="display:none;">
+            <div class="form-group" style="margin-bottom:12px;">
+              <div style="display:flex;gap:4px;border:1px solid var(--border,#ddd);border-radius:6px;overflow:hidden;">
+                <label
+                  style="flex:1;text-align:center;padding:8px 12px;cursor:pointer;margin:0;font-weight:500;transition:all .2s;"
+                  id="modeOpenLabel">
+                  <input type="radio" name="sqliteMode" value="open" checked onchange="toggleSqliteMode()"
+                    style="display:none;">
+                  📂 Open Existing
+                </label>
+                <label
+                  style="flex:1;text-align:center;padding:8px 12px;cursor:pointer;margin:0;font-weight:500;transition:all .2s;"
+                  id="modeCreateLabel">
+                  <input type="radio" name="sqliteMode" value="create" onchange="toggleSqliteMode()"
+                    style="display:none;">
+                  ✨ Create New
+                </label>
+              </div>
+            </div>
+            <div class="form-group" id="sqliteUploadGroup">
+              <label>Database File (*.db, *.sqlite)</label>
+              <input type="file" name="sqliteFile" id="sqliteFileInput" accept=".db,.sqlite,.sqlite3"
+                style="width:100%">
+            </div>
+
+            <div class="form-group" id="sqliteCreateGroup" style="display:none;">
+              <label>New Database Name (optional)</label>
+              <input type="text" name="newDbName" id="sqliteCreateInput" placeholder="my-memory-db" style="width:100%">
+              <small style="color:var(--text-muted,#888);display:block;margin-top:4px;">Creates a temporary in-memory
+                database. Data will be lost when the server restarts.</small>
+            </div>
+          </div>
+
+          <button type="submit" class="btn btn-primary"
+            style="width:100%;justify-content:center;margin-top:8px;">Connect</button>
+        </form>
   </div>
 </div>
+
+<script>
+  function toggleDbFields() {
+    var type = document.getElementById('dbType').value;
+    var mysqlFields = document.getElementById('mysqlFields');
+    var sqliteFields = document.getElementById('sqliteFields');
+
+    // Get inputs to disable/enable
+    var mysqlInputs = mysqlFields.querySelectorAll('input');
+    var sqliteInputs = sqliteFields.querySelectorAll('input:not([type="radio"])');
+
+    if (type === 'sqlite') {
+      mysqlFields.style.display = 'none';
+      sqliteFields.style.display = 'block';
+      mysqlInputs.forEach(i => i.disabled = true);
+      sqliteInputs.forEach(i => i.disabled = false);
+      toggleSqliteMode(); // ensure correct sqlite sub-fields are enabled
+    } else {
+      mysqlFields.style.display = 'block';
+      sqliteFields.style.display = 'none';
+      mysqlInputs.forEach(i => i.disabled = false);
+      sqliteInputs.forEach(i => i.disabled = true);
+    }
+  }
+
+  function toggleSqliteMode() {
+    var type = document.getElementById('dbType').value;
+    if (type !== 'sqlite') return; // Don't manage if sqlite is hidden
+
+    var mode = document.querySelector('input[name="sqliteMode"]:checked').value;
+    var uploadGroup = document.getElementById('sqliteUploadGroup');
+    var createGroup = document.getElementById('sqliteCreateGroup');
+    var fileInput = document.getElementById('sqliteFileInput');
+    var createInput = document.getElementById('sqliteCreateInput');
+
+    var openLabel = document.getElementById('modeOpenLabel');
+    var createLabel = document.getElementById('modeCreateLabel');
+    var activeColor = 'var(--primary,#4a90d9)';
+    var activeBg = 'var(--bg-hover,#e8f0fe)';
+
+    if (mode === 'create') {
+      uploadGroup.style.display = 'none';
+      createGroup.style.display = 'block';
+      fileInput.disabled = true;
+      createInput.disabled = false;
+
+      createLabel.style.background = activeBg;
+      createLabel.style.color = activeColor;
+      openLabel.style.background = 'transparent';
+      openLabel.style.color = 'inherit';
+    } else {
+      uploadGroup.style.display = 'block';
+      createGroup.style.display = 'none';
+      fileInput.disabled = false;
+      createInput.disabled = true;
+
+      openLabel.style.background = activeBg;
+      openLabel.style.color = activeColor;
+      createLabel.style.background = 'transparent';
+      createLabel.style.color = 'inherit';
+    }
+  }
+
+  // Initialize
+  (function () { toggleSqliteMode(); })();
+</script>

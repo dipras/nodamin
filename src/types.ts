@@ -5,11 +5,14 @@
 export interface DbConnection {
   id: string;
   name: string;
-  type: "mysql"; // will expand later
-  host: string;
-  port: number;
-  user: string;
-  password: string;
+  type: "mysql" | "sqlite";
+  // MySQL fields
+  host?: string;
+  port?: number;
+  user?: string;
+  password?: string;
+  // SQLite fields
+  filePath?: string;
 }
 
 export interface ServerConfig {

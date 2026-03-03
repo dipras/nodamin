@@ -83,14 +83,59 @@ export async function handleRequest(
   sendHtml(res, 404, `<h1>404 Not Found</h1><p>${path}</p>`);
 }
 
+import formidable from "formidable";
+
 async function parseBody(req: IncomingMessage): Promise<Record<string, unknown>> {
+  const contentType = req.headers["content-type"] ?? "";
+
+  if (contentType.includes("multipart/form-data")) {
+    return new Promise((resolve, reject) => {
+      const form = formidable({
+        keepExtensions: true,
+        multiples: false,
+        allowEmptyFiles: true,
+        minFileSize: 0
+      });
+
+      try {
+        form.parse(req, (err, fields, files) => {
+          if (err) {
+            // Formidable throws specific errors when file is empty even with allowEmptyFiles in some versions
+            if (err.message && err.message.includes("options.allowEmptyFiles is false")) {
+              // We consider this a success but with no files
+              console.warn("[Formidable] Caught empty file error, treating as no-file upload");
+              const result: Record<string, unknown> = {};
+              for (const key in fields) {
+                result[key] = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+              }
+              return resolve(result);
+            }
+            return reject(err);
+          }
+          const result: Record<string, unknown> = {};
+          for (const key in fields) {
+            result[key] = Array.isArray(fields[key]) ? fields[key][0] : fields[key];
+          }
+          for (const key in files) {
+            const file = Array.isArray(files[key]) ? files[key][0] : files[key];
+            if (file && (file.size > 0 || file.originalFilename)) {
+              result[key] = file;
+            }
+          }
+          resolve(result);
+        });
+      } catch (err) {
+        reject(err);
+      }
+    });
+  }
+
   return new Promise((resolve) => {
     let data = "";
     req.on("data", (chunk: Buffer) => {
       data += chunk.toString();
     });
     req.on("end", () => {
-      const contentType = req.headers["content-type"] ?? "";
       if (contentType.includes("application/json")) {
         try {
           resolve(JSON.parse(data) as Record<string, unknown>);

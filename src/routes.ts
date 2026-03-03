@@ -4,10 +4,12 @@
 
 import type { ServerResponse } from "node:http";
 import { get, post, sendHtml, redirect } from "./router.js";
-import * as db from "./db/mysql.js";
+import * as db from "./db/index.js";
 import * as views from "./views/pages.js";
 import { FAVICON_BASE64 } from "./views/assets.js";
 import type { RouteContext } from "./types.js";
+import os from "node:os";
+import path from "node:path";
 
 // Helper to check if connected to database
 function requireConnection(res: ServerResponse): boolean {
@@ -40,29 +42,78 @@ export function registerRoutes(): void {
       sendHtml(res, 200, views.loginPage());
       return;
     }
+    // SQLite: single file = single database, go directly to tables
+    if (conn.type === "sqlite") {
+      const dbName = db.getCurrentDatabase() ?? "main";
+      redirect(res, `/db/${encodeURIComponent(dbName)}`);
+      return;
+    }
     const databases = await db.listDatabases();
     sendHtml(res, 200, views.databaseListPage(databases, conn.name));
   });
 
   post("/connect", async (ctx: RouteContext, res: ServerResponse) => {
-    const { host, port, user, password, type } = ctx.body as Record<string, string>;
-    const conn = {
-      id: "default",
-      name: `${user}@${host}:${port}`,
-      type: (type ?? "mysql") as "mysql",
-      host: host ?? "localhost",
-      port: Number(port) || 3306,
-      user: user ?? "root",
-      password: password ?? "",
-    };
+    try {
+      console.log("[POST /connect] Body:", ctx.body);
+      const type = (ctx.body["type"] as string) ?? "mysql";
+      const sqliteMode = ctx.body["sqliteMode"] as string;
+      const dbType = type as "mysql" | "sqlite";
 
-    const ok = await db.testConnection(conn);
-    if (!ok) {
-      sendHtml(res, 200, views.loginPage("Connection failed. Please check your credentials."));
-      return;
+      let conn: import("./types.js").DbConnection;
+
+      if (dbType === "sqlite") {
+        let finalFilePath = "";
+
+        if (sqliteMode === "create") {
+          const dbName = (ctx.body["newDbName"] as string) || `memory_db_${Date.now()}`;
+          finalFilePath = ":memory:"; // SQLite in-memory
+
+          conn = {
+            id: "default",
+            name: dbName,
+            type: "sqlite",
+            filePath: finalFilePath,
+          };
+        } else {
+          // Open existing
+          const file = ctx.body["sqliteFile"] as any; // Type is File from formidable
+          if (!file || !file.filepath) {
+            sendHtml(res, 200, views.loginPage("Please upload a valid SQLite database file."));
+            return;
+          }
+          finalFilePath = file.filepath;
+
+          conn = {
+            id: "default",
+            name: path.basename(finalFilePath),
+            type: "sqlite",
+            filePath: finalFilePath,
+          };
+        }
+      } else {
+        const { host, port, user, password } = ctx.body as Record<string, string>;
+        conn = {
+          id: "default",
+          name: `${user ?? "root"}@${host ?? "localhost"}:${port ?? "3306"}`,
+          type: "mysql",
+          host: host ?? "localhost",
+          port: Number(port) || 3306,
+          user: user ?? "root",
+          password: password ?? "",
+        };
+      }
+
+      const ok = await db.testConnection(conn);
+      if (!ok) {
+        sendHtml(res, 200, views.loginPage("Connection failed. Please check your credentials or file."));
+        return;
+      }
+      db.connect(conn);
+      redirect(res, "/");
+    } catch (err: unknown) {
+      console.error("[Connect Error]:", err);
+      sendHtml(res, 200, views.loginPage("Internal error occurred during connection. Check server logs."));
     }
-    db.connect(conn);
-    redirect(res, "/");
   });
 
   get("/disconnect", async (_ctx: RouteContext, res: ServerResponse) => {
@@ -125,7 +176,7 @@ export function registerRoutes(): void {
       const length = (colLengths as string[])[i];
       // Combine type with length if length provided
       const fullType = length && length.trim() ? `${baseType}(${length})` : baseType;
-      
+
       const col: any = {
         name,
         type: fullType,
@@ -169,7 +220,7 @@ export function registerRoutes(): void {
     db.setCurrentDatabase(dbName);
 
     const sql = ctx.body["sql"] as string;
-    
+
     try {
       const result = await db.importSQL(sql);
       const tables = await db.listTables();
@@ -198,7 +249,7 @@ export function registerRoutes(): void {
       db.getTableStructure(table)
     ]);
     const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
-    
+
     sendHtml(
       res,
       200,
@@ -395,8 +446,8 @@ export function registerRoutes(): void {
     db.setCurrentDatabase(dbName);
 
     const action = ctx.body["action"] as string;
-    const tables = Array.isArray(ctx.body["tables[]"]) 
-      ? ctx.body["tables[]"] as string[] 
+    const tables = Array.isArray(ctx.body["tables[]"])
+      ? ctx.body["tables[]"] as string[]
       : [ctx.body["tables[]"] as string];
 
     if (!tables || tables.length === 0) {
@@ -420,7 +471,7 @@ export function registerRoutes(): void {
           const dump = await db.exportTable(table);
           combinedDump += dump + "\n\n";
         }
-        
+
         res.writeHead(200, {
           "Content-Type": "application/sql",
           "Content-Disposition": `attachment; filename="${dbName}_export.sql"`,
@@ -446,8 +497,8 @@ export function registerRoutes(): void {
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
 
-    const rowIds = Array.isArray(ctx.body["rows[]"]) 
-      ? ctx.body["rows[]"] as string[] 
+    const rowIds = Array.isArray(ctx.body["rows[]"])
+      ? ctx.body["rows[]"] as string[]
       : [ctx.body["rows[]"] as string];
 
     if (!rowIds || rowIds.length === 0) {
@@ -476,7 +527,7 @@ export function registerRoutes(): void {
       for (const rowId of rowIds) {
         const values = rowId.split('|');
         const where: Record<string, unknown> = {};
-        
+
         primaryKeys.forEach((pk, i) => {
           where[pk] = values[i];
         });

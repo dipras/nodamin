@@ -188,7 +188,8 @@ export function exportPage(
   database: string,
   table: string,
   dump: string,
-  tables: { name: string }[]
+  tables: { name: string }[],
+  preview: boolean = false
 ): string {
   const sidebar = render(compiled.sidebar, {
     title: "Tables",
@@ -197,8 +198,25 @@ export function exportPage(
       name: t.name,
     })),
   });
-  const content = render(compiled.exportTable, { database, table, dump });
+  const content = render(compiled.exportTable, { database, table, dump, preview });
   return layout(`Export - ${table}`, content, sidebar);
+}
+
+export function exportDatabasePage(
+  database: string,
+  dump: string,
+  tables: { name: string }[],
+  preview: boolean = false
+): string {
+  const sidebar = render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map((t) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
+      name: t.name,
+    })),
+  });
+  const content = render(compiled.exportDatabase, { database, dump, preview });
+  return layout(`Export - ${database}`, content, sidebar);
 }
 
 export function importPage(

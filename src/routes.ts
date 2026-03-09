@@ -591,20 +591,34 @@ export function registerRoutes(): void {
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(dbName);
 
-    const dump = await db.exportTable(table);
+    const structureOnly = ctx.query["structureOnly"] === "1";
+    const isDownload = ctx.query["download"] === "1";
+    const isOpen = ctx.query["open"] === "1";
 
-    // If download param exists, send as file
-    if (ctx.query["download"]) {
-      res.writeHead(200, {
-        "Content-Type": "application/sql",
-        "Content-Disposition": `attachment; filename="${table}.sql"`,
-      });
-      res.end(dump);
-      return;
+    // If download or open, generate the dump
+    if (isDownload || isOpen) {
+      const dump = await db.exportTable(table, structureOnly);
+
+      if (isDownload) {
+        const filename = structureOnly ? `${table}_structure.sql` : `${table}.sql`;
+        res.writeHead(200, {
+          "Content-Type": "application/sql",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        });
+        res.end(dump);
+        return;
+      }
+
+      if (isOpen) {
+        const tables = await db.listTables();
+        sendHtml(res, 200, views.exportPage(dbName, table, dump, tables, true));
+        return;
+      }
     }
 
+    // Default: show preview/options page
     const tables = await db.listTables();
-    sendHtml(res, 200, views.exportPage(dbName, table, dump, tables));
+    sendHtml(res, 200, views.exportPage(dbName, table, "", tables, false));
   });
 
   // ---- Export Database ----
@@ -614,12 +628,33 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(dbName);
 
-    const dump = await db.exportDatabase();
+    const structureOnly = ctx.query["structureOnly"] === "1";
+    const isDownload = ctx.query["download"] === "1";
+    const isOpen = ctx.query["open"] === "1";
 
-    res.writeHead(200, {
-      "Content-Type": "application/sql",
-      "Content-Disposition": `attachment; filename="${dbName}_full_export.sql"`,
-    });
-    res.end(dump);
+    // If download or open, generate the dump
+    if (isDownload || isOpen) {
+      const dump = await db.exportDatabase(structureOnly);
+
+      if (isDownload) {
+        const filename = structureOnly ? `${dbName}_structure.sql` : `${dbName}_full_export.sql`;
+        res.writeHead(200, {
+          "Content-Type": "application/sql",
+          "Content-Disposition": `attachment; filename="${filename}"`,
+        });
+        res.end(dump);
+        return;
+      }
+
+      if (isOpen) {
+        const tables = await db.listTables();
+        sendHtml(res, 200, views.exportDatabasePage(dbName, dump, tables, true));
+        return;
+      }
+    }
+
+    // Default: show preview/options page
+    const tables = await db.listTables();
+    sendHtml(res, 200, views.exportDatabasePage(dbName, "", tables, false));
   });
 }

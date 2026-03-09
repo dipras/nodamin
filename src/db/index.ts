@@ -132,14 +132,14 @@ export async function createTable(
     return requireDriver().createTable(table, columns);
 }
 
-export async function exportTable(table: string): Promise<string> {
-    return requireDriver().exportTable(table);
+export async function exportTable(table: string, structureOnly?: boolean): Promise<string> {
+    return requireDriver().exportTable(table, structureOnly);
 }
 
 export async function importSQL(sql: string): Promise<QueryResult> {
     return requireDriver().importSQL(sql);
 }
 
-export async function exportDatabase(): Promise<string> {
-    return requireDriver().exportDatabase();
+export async function exportDatabase(structureOnly?: boolean): Promise<string> {
+    return requireDriver().exportDatabase(structureOnly);
 }

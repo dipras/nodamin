@@ -300,35 +300,38 @@ export class MySQLDriver implements DatabaseDriver {
     return result;
   }
 
-  async exportTable(table: string): Promise<string> {
+  async exportTable(table: string, structureOnly: boolean = false): Promise<string> {
     const p = await this.getPool();
 
     const [createRows] = await p.query(`SHOW CREATE TABLE \`${table}\``);
     const createTableSQL = (createRows as any[])[0]["Create Table"];
 
-    const [rows] = await p.query(`SELECT * FROM \`${table}\``);
-    const data = rows as Record<string, unknown>[];
-
     let dump = `-- Table: ${table}\n`;
-    dump += `-- Generated: ${new Date().toISOString()}\n\n`;
+    dump += `-- Generated: ${new Date().toISOString()}\n`;
+    dump += structureOnly ? `-- Export: Structure Only\n\n` : `-- Export: Structure and Data\n\n`;
     dump += `DROP TABLE IF EXISTS \`${table}\`;\n`;
     dump += createTableSQL + ";\n\n";
 
-    if (data.length > 0) {
-      const columns = Object.keys(data[0]!);
-      dump += `INSERT INTO \`${table}\` (\`${columns.join("`, `")}\`) VALUES\n`;
+    if (!structureOnly) {
+      const [rows] = await p.query(`SELECT * FROM \`${table}\``);
+      const data = rows as Record<string, unknown>[];
 
-      const values = data.map((row) => {
-        const vals = columns.map((col) => {
-          const val = row[col];
-          if (val === null) return "NULL";
-          if (typeof val === "number") return String(val);
-          return `'${String(val).replace(/'/g, "\\'")}'`;
+      if (data.length > 0) {
+        const columns = Object.keys(data[0]!);
+        dump += `INSERT INTO \`${table}\` (\`${columns.join("`, `")}\`) VALUES\n`;
+
+        const values = data.map((row) => {
+          const vals = columns.map((col) => {
+            const val = row[col];
+            if (val === null) return "NULL";
+            if (typeof val === "number") return String(val);
+            return `'${String(val).replace(/'/g, "\\'")}'`;
+          });
+          return `  (${vals.join(", ")})`;
         });
-        return `  (${vals.join(", ")})`;
-      });
 
-      dump += values.join(",\n") + ";\n";
+        dump += values.join(",\n") + ";\n";
+      }
     }
 
     return dump;
@@ -357,18 +360,19 @@ export class MySQLDriver implements DatabaseDriver {
     };
   }
 
-  async exportDatabase(): Promise<string> {
+  async exportDatabase(structureOnly: boolean = false): Promise<string> {
     if (!this.currentDatabase) throw new Error("No database selected");
 
     let dump = `-- Database: ${this.currentDatabase}\n`;
-    dump += `-- Generated: ${new Date().toISOString()}\n\n`;
+    dump += `-- Generated: ${new Date().toISOString()}\n`;
+    dump += structureOnly ? `-- Export: Structure Only\n\n` : `-- Export: Structure and Data\n\n`;
     dump += `CREATE DATABASE IF NOT EXISTS \`${this.currentDatabase}\`;\n`;
     dump += `USE \`${this.currentDatabase}\`;\n\n`;
 
     const tables = await this.listTables();
 
     for (const table of tables) {
-      const tableDump = await this.exportTable(table.name);
+      const tableDump = await this.exportTable(table.name, structureOnly);
       dump += tableDump + "\n\n";
     }
 

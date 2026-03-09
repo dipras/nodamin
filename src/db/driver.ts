@@ -44,7 +44,7 @@ export interface DatabaseDriver {
             defaultValue?: string;
         }[]
     ): Promise<QueryResult>;
-    exportTable(table: string): Promise<string>;
+    exportTable(table: string, structureOnly?: boolean): Promise<string>;
     importSQL(sql: string): Promise<QueryResult>;
-    exportDatabase(): Promise<string>;
+    exportDatabase(structureOnly?: boolean): Promise<string>;
 }

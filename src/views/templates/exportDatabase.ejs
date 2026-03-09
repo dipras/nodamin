@@ -1,6 +1,6 @@
-<h1>📦 Export Table: <%= data.table %></h1>
+<h1>📦 Export Database: <%= data.database %></h1>
 <div class="actions">
-  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Back to Table</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Back to Database</a>
 </div>
 
 <div class="card">
@@ -54,12 +54,12 @@ function copyDump() {
 function downloadExport() {
   const exportType = document.querySelector('input[name="exportType"]:checked').value;
   const structureOnly = exportType === 'structure' ? '1' : '0';
-  window.location.href = '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export?download=1&structureOnly=' + structureOnly;
+  window.location.href = '/db/<%= encodeURIComponent(data.database) %>/export?download=1&structureOnly=' + structureOnly;
 }
 
 function openPreview() {
   const exportType = document.querySelector('input[name="exportType"]:checked').value;
   const structureOnly = exportType === 'structure' ? '1' : '0';
-  window.location.href = '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export?open=1&structureOnly=' + structureOnly;
+  window.location.href = '/db/<%= encodeURIComponent(data.database) %>/export?open=1&structureOnly=' + structureOnly;
 }
 </script>

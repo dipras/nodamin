@@ -5,6 +5,7 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
 import { URL } from "node:url";
 import type { RouteContext } from "./types.js";
+import { getSessionIdFromRequest } from "./session.js";
 
 type Handler = (ctx: RouteContext, res: ServerResponse) => Promise<void>;
 
@@ -47,6 +48,9 @@ export async function handleRequest(
   const method = req.method ?? "GET";
   const path = decodeURIComponent(url.pathname);
 
+  // Get session ID from cookie
+  const sessionId = getSessionIdFromRequest(req);
+
   // Parse query params
   const query: Record<string, string> = {};
   url.searchParams.forEach((v, k) => {
@@ -69,7 +73,7 @@ export async function handleRequest(
         params[name] = decodeURIComponent(match[i + 1]!);
       });
 
-      const ctx: RouteContext = { path, method, query, body, params };
+      const ctx: RouteContext = { path, method, query, body, params, sessionId };
       try {
         await route.handler(ctx, res);
       } catch (err: unknown) {

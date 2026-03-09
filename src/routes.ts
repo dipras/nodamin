@@ -8,12 +8,13 @@ import * as db from "./db/index.js";
 import * as views from "./views/pages.js";
 import { FAVICON_BASE64 } from "./views/assets.js";
 import type { RouteContext } from "./types.js";
+import { createSession, clearSessionCookie } from "./session.js";
 import os from "node:os";
 import path from "node:path";
 
 // Helper to check if connected to database
-function requireConnection(res: ServerResponse): boolean {
-  if (!db.getConnection()) {
+function requireConnection(ctx: RouteContext, res: ServerResponse): boolean {
+  if (!ctx.sessionId || !db.getConnection(ctx.sessionId)) {
     redirect(res, "/");
     return false;
   }
@@ -36,25 +37,24 @@ export function registerRoutes(): void {
 
   // ---- Connection ----
 
-  get("/", async (_ctx: RouteContext, res: ServerResponse) => {
-    const conn = db.getConnection();
+  get("/", async (ctx: RouteContext, res: ServerResponse) => {
+    const conn = db.getConnection(ctx.sessionId);
     if (!conn) {
       sendHtml(res, 200, views.loginPage());
       return;
     }
     // SQLite: single file = single database, go directly to tables
     if (conn.type === "sqlite") {
-      const dbName = db.getCurrentDatabase() ?? "main";
+      const dbName = db.getCurrentDatabase(ctx.sessionId!) ?? "main";
       redirect(res, `/db/${encodeURIComponent(dbName)}`);
       return;
     }
-    const databases = await db.listDatabases();
+    const databases = await db.listDatabases(ctx.sessionId!);
     sendHtml(res, 200, views.databaseListPage(databases, conn.name));
   });
 
   post("/connect", async (ctx: RouteContext, res: ServerResponse) => {
     try {
-      console.log("[POST /connect] Body:", ctx.body);
       const type = (ctx.body["type"] as string) ?? "mysql";
       const sqliteMode = ctx.body["sqliteMode"] as string;
       const dbType = type as "mysql" | "sqlite";
@@ -108,7 +108,10 @@ export function registerRoutes(): void {
         sendHtml(res, 200, views.loginPage("Connection failed. Please check your credentials or file."));
         return;
       }
-      db.connect(conn);
+      
+      // Create new session and connect
+      const sessionId = createSession(res);
+      db.connect(sessionId, conn);
       redirect(res, "/");
     } catch (err: unknown) {
       console.error("[Connect Error]:", err);
@@ -116,51 +119,54 @@ export function registerRoutes(): void {
     }
   });
 
-  get("/disconnect", async (_ctx: RouteContext, res: ServerResponse) => {
-    db.disconnect();
+  get("/disconnect", async (ctx: RouteContext, res: ServerResponse) => {
+    if (ctx.sessionId) {
+      db.disconnect(ctx.sessionId);
+      clearSessionCookie(res);
+    }
     redirect(res, "/");
   });
 
   // ---- Database operations ----
 
   post("/db/create", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const name = ctx.body["name"] as string;
     if (name) {
-      await db.createDatabase(name);
+      await db.createDatabase(ctx.sessionId!, name);
     }
     redirect(res, "/");
   });
 
   get("/db/:db/drop", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
-    await db.dropDatabase(ctx.params["db"]!);
-    db.setCurrentDatabase(null);
+    if (!requireConnection(ctx, res)) return;
+    await db.dropDatabase(ctx.sessionId!, ctx.params["db"]!);
+    db.setCurrentDatabase(ctx.sessionId!, null);
     redirect(res, "/");
   });
 
   get("/db/:db", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
-    const tables = await db.listTables();
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.tableListPage(dbName, tables));
   });
 
   // ---- Create Table (must be before generic /db/:db/table/:table) ----
 
   get("/db/:db/table/create", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
-    const tables = await db.listTables();
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.createTablePage(dbName, tables));
   });
 
   post("/db/:db/table/create", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const tableName = ctx.body["tableName"] as string;
     const colNames = Array.isArray(ctx.body["colName[]"]) ? ctx.body["colName[]"] : [ctx.body["colName[]"]];
@@ -194,12 +200,12 @@ export function registerRoutes(): void {
     console.log("Creating table:", tableName, "with columns:", JSON.stringify(columns, null, 2));
 
     try {
-      await db.createTable(tableName, columns);
+      await db.createTable(ctx.sessionId!, tableName, columns);
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(tableName)}`);
     } catch (err: unknown) {
       console.error("Failed to create table:", err);
       const msg = err instanceof Error ? err.message : String(err);
-      const tables = await db.listTables();
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.createTablePage(dbName, tables, msg));
     }
   });
@@ -207,27 +213,27 @@ export function registerRoutes(): void {
   // ---- Import SQL (must be before generic /db/:db/table/:table) ----
 
   get("/db/:db/import", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
-    const tables = await db.listTables();
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.importPage(dbName, tables));
   });
 
   post("/db/:db/import", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const sql = ctx.body["sql"] as string;
 
     try {
-      const result = await db.importSQL(sql);
-      const tables = await db.listTables();
+      const result = await db.importSQL(ctx.sessionId!, sql);
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.importPage(dbName, tables, { message: result.message || 'Import successful' }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const tables = await db.listTables();
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.importPage(dbName, tables, undefined, msg));
     }
   });
@@ -235,18 +241,18 @@ export function registerRoutes(): void {
   // ---- Table operations ----
 
   get("/db/:db/table/:table", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const page = Number(ctx.query["page"]) || 1;
     const sort = ctx.query["sort"];
     const order = ctx.query["order"];
 
     const [data, columns] = await Promise.all([
-      db.getTableData(table, page, 50, sort, order),
-      db.getTableStructure(table)
+      db.getTableData(ctx.sessionId!, table, page, 50, sort, order),
+      db.getTableStructure(ctx.sessionId!, table)
     ]);
     const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
 
@@ -258,36 +264,36 @@ export function registerRoutes(): void {
   });
 
   get("/db/:db/table/:table/structure", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
     const [columns, tables] = await Promise.all([
-      db.getTableStructure(table),
-      db.listTables()
+      db.getTableStructure(ctx.sessionId!, table),
+      db.listTables(ctx.sessionId!)
     ]);
     sendHtml(res, 200, views.tableStructurePage(dbName, table, columns, tables));
   });
 
   get("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
     const [columns, tables] = await Promise.all([
-      db.getTableStructure(table),
-      db.listTables()
+      db.getTableStructure(ctx.sessionId!, table),
+      db.listTables(ctx.sessionId!)
     ]);
     sendHtml(res, 200, views.insertPage(dbName, table, columns, tables));
   });
 
   post("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
-    const columns = await db.getTableStructure(table);
+    const columns = await db.getTableStructure(ctx.sessionId!, table);
     const data: Record<string, unknown> = {};
     for (const col of columns) {
       if (col.extra.includes("auto_increment")) continue;
@@ -300,24 +306,24 @@ export function registerRoutes(): void {
     }
 
     try {
-      await db.insertRow(table, data);
+      await db.insertRow(ctx.sessionId!, table, data);
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const tables = await db.listTables();
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.insertPage(dbName, table, columns, tables, msg));
     }
   });
 
   get("/db/:db/table/:table/edit", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const [columns, tables] = await Promise.all([
-      db.getTableStructure(table),
-      db.listTables()
+      db.getTableStructure(ctx.sessionId!, table),
+      db.listTables(ctx.sessionId!)
     ]);
     // Build WHERE from query params
     const where = { ...ctx.query };
@@ -329,7 +335,7 @@ export function registerRoutes(): void {
     const whereClauses = Object.entries(where)
       .map(([k, v]) => `\`${k}\` = '${v.replace(/'/g, "\\'")}'`)
       .join(" AND ");
-    const result = await db.executeQuery(
+    const result = await db.executeQuery(ctx.sessionId!, 
       `SELECT * FROM \`${table}\` WHERE ${whereClauses} LIMIT 1`
     );
 
@@ -342,10 +348,10 @@ export function registerRoutes(): void {
   });
 
   post("/db/:db/table/:table/update", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     // Original values from query string (WHERE clause)
     const where: Record<string, unknown> = {};
@@ -355,7 +361,7 @@ export function registerRoutes(): void {
 
     // New values from body
     const data: Record<string, unknown> = {};
-    const columns = await db.getTableStructure(table);
+    const columns = await db.getTableStructure(ctx.sessionId!, table);
     for (const col of columns) {
       const val = ctx.body[col.name];
       if (val === "" && col.nullable) {
@@ -366,31 +372,31 @@ export function registerRoutes(): void {
     }
 
     try {
-      await db.updateRow(table, data, where);
+      await db.updateRow(ctx.sessionId!, table, data, where);
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
-      const tables = await db.listTables();
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.editPage(dbName, table, columns, ctx.body as Record<string, unknown>, tables, msg));
     }
   });
 
   get("/db/:db/table/:table/delete", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const where: Record<string, unknown> = { ...ctx.query };
     try {
-      await db.deleteRow(table, where);
+      await db.deleteRow(ctx.sessionId!, table, where);
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const page = Number(ctx.query["page"]) || 1;
       const [data, columns] = await Promise.all([
-        db.getTableData(table, page, 50),
-        db.getTableStructure(table)
+        db.getTableData(ctx.sessionId!, table, page, 50),
+        db.getTableStructure(ctx.sessionId!, table)
       ]);
       const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
       sendHtml(res, 200, views.tableDataPage(
@@ -401,34 +407,34 @@ export function registerRoutes(): void {
   });
 
   get("/db/:db/table/:table/drop", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
     try {
-      await db.dropTable(table);
+      await db.dropTable(ctx.sessionId!, table);
       redirect(res, `/db/${encodeURIComponent(dbName)}`);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      const tables = await db.listTables();
+      const tables = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.tableListPage(dbName, tables, undefined, errorMsg));
     }
   });
 
   get("/db/:db/table/:table/truncate", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
     try {
-      await db.truncateTable(table);
+      await db.truncateTable(ctx.sessionId!, table);
       redirect(res, `/db/${encodeURIComponent(dbName)}/table/${encodeURIComponent(table)}`);
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const page = 1;
       const [data, columns] = await Promise.all([
-        db.getTableData(table, page, 50),
-        db.getTableStructure(table)
+        db.getTableData(ctx.sessionId!, table, page, 50),
+        db.getTableStructure(ctx.sessionId!, table)
       ]);
       const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
       sendHtml(res, 200, views.tableDataPage(
@@ -441,9 +447,9 @@ export function registerRoutes(): void {
   // ---- Bulk Actions for Tables ----
 
   post("/db/:db/tables/bulk", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const action = ctx.body["action"] as string;
     const tables = Array.isArray(ctx.body["tables[]"])
@@ -458,17 +464,17 @@ export function registerRoutes(): void {
     try {
       if (action === "drop") {
         for (const table of tables) {
-          await db.dropTable(table);
+          await db.dropTable(ctx.sessionId!, table);
         }
       } else if (action === "truncate") {
         for (const table of tables) {
-          await db.truncateTable(table);
+          await db.truncateTable(ctx.sessionId!, table);
         }
       } else if (action === "export") {
         // Generate combined SQL dump
         let combinedDump = "";
         for (const table of tables) {
-          const dump = await db.exportTable(table);
+          const dump = await db.exportTable(ctx.sessionId!, table);
           combinedDump += dump + "\n\n";
         }
 
@@ -481,7 +487,7 @@ export function registerRoutes(): void {
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      const tablesList = await db.listTables();
+      const tablesList = await db.listTables(ctx.sessionId!);
       sendHtml(res, 200, views.tableListPage(dbName, tablesList, undefined, errorMsg));
       return;
     }
@@ -492,10 +498,10 @@ export function registerRoutes(): void {
   // ---- Bulk Delete for Rows ----
 
   post("/db/:db/table/:table/bulk-delete", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const rowIds = Array.isArray(ctx.body["rows[]"])
       ? ctx.body["rows[]"] as string[]
@@ -507,13 +513,13 @@ export function registerRoutes(): void {
     }
 
     // Get primary keys
-    const columns = await db.getTableStructure(table);
+    const columns = await db.getTableStructure(ctx.sessionId!, table);
     const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
 
     if (primaryKeys.length === 0) {
       const page = Number(ctx.query["page"]) || 1;
       const [data] = await Promise.all([
-        db.getTableData(table, page, 50)
+        db.getTableData(ctx.sessionId!, table, page, 50)
       ]);
       sendHtml(res, 200, views.tableDataPage(
         dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
@@ -532,13 +538,13 @@ export function registerRoutes(): void {
           where[pk] = values[i];
         });
 
-        await db.deleteRow(table, where);
+        await db.deleteRow(ctx.sessionId!, table, where);
       }
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const page = Number(ctx.query["page"]) || 1;
       const [data] = await Promise.all([
-        db.getTableData(table, page, 50)
+        db.getTableData(ctx.sessionId!, table, page, 50)
       ]);
       sendHtml(res, 200, views.tableDataPage(
         dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
@@ -557,28 +563,28 @@ export function registerRoutes(): void {
   });
 
   post("/sql", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const sql = (ctx.body["sql"] as string) ?? "";
-    const result = await db.executeQuery(sql);
+    const result = await db.executeQuery(ctx.sessionId!, sql);
     sendHtml(res, 200, views.sqlPage(null, [], result, sql));
   });
 
   get("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
-    const tables = await db.listTables();
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.sqlPage(dbName, tables));
   });
 
   post("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
     const sql = (ctx.body["sql"] as string) ?? "";
     const [result, tables] = await Promise.all([
-      db.executeQuery(sql),
-      db.listTables()
+      db.executeQuery(ctx.sessionId!, sql),
+      db.listTables(ctx.sessionId!)
     ]);
     sendHtml(res, 200, views.sqlPage(dbName, tables, result, sql));
   });
@@ -586,10 +592,10 @@ export function registerRoutes(): void {
   // ---- Export Table ----
 
   get("/db/:db/table/:table/export", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     const table = ctx.params["table"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const structureOnly = ctx.query["structureOnly"] === "1";
     const isDownload = ctx.query["download"] === "1";
@@ -597,7 +603,7 @@ export function registerRoutes(): void {
 
     // If download or open, generate the dump
     if (isDownload || isOpen) {
-      const dump = await db.exportTable(table, structureOnly);
+      const dump = await db.exportTable(ctx.sessionId!, table, structureOnly);
 
       if (isDownload) {
         const filename = structureOnly ? `${table}_structure.sql` : `${table}.sql`;
@@ -610,23 +616,23 @@ export function registerRoutes(): void {
       }
 
       if (isOpen) {
-        const tables = await db.listTables();
+        const tables = await db.listTables(ctx.sessionId!);
         sendHtml(res, 200, views.exportPage(dbName, table, dump, tables, true));
         return;
       }
     }
 
     // Default: show preview/options page
-    const tables = await db.listTables();
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.exportPage(dbName, table, "", tables, false));
   });
 
   // ---- Export Database ----
 
   get("/db/:db/export", async (ctx: RouteContext, res: ServerResponse) => {
-    if (!requireConnection(res)) return;
+    if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
-    db.setCurrentDatabase(dbName);
+    db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     const structureOnly = ctx.query["structureOnly"] === "1";
     const isDownload = ctx.query["download"] === "1";
@@ -634,7 +640,7 @@ export function registerRoutes(): void {
 
     // If download or open, generate the dump
     if (isDownload || isOpen) {
-      const dump = await db.exportDatabase(structureOnly);
+      const dump = await db.exportDatabase(ctx.sessionId!, structureOnly);
 
       if (isDownload) {
         const filename = structureOnly ? `${dbName}_structure.sql` : `${dbName}_full_export.sql`;
@@ -647,14 +653,14 @@ export function registerRoutes(): void {
       }
 
       if (isOpen) {
-        const tables = await db.listTables();
+        const tables = await db.listTables(ctx.sessionId!);
         sendHtml(res, 200, views.exportDatabasePage(dbName, dump, tables, true));
         return;
       }
     }
 
     // Default: show preview/options page
-    const tables = await db.listTables();
+    const tables = await db.listTables(ctx.sessionId!);
     sendHtml(res, 200, views.exportDatabasePage(dbName, "", tables, false));
   });
 }

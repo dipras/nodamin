@@ -1,6 +1,6 @@
 {
   "name": "@dipras/nodamin",
-  "version": "1.2.0",
+  "version": "1.2.5",
   "description": "Lightweight Database Admin for Node.js",
   "keywords": [
     "database",

@@ -90,38 +90,54 @@ function addColumn() {
   div.className = 'column-row';
   div.style.cssText = 'display: grid; grid-template-columns: 2fr 1.5fr 1fr 80px 80px 80px 120px 40px; gap: 8px; margin-bottom: 8px; align-items: end;';
   div.innerHTML = `
-    <input type="text" name="colName[]" placeholder="column_name" required />
-    <select name="colType[]" required onchange="toggleLength(this)">
-      <option value="INT">INT</option>
-      <option value="BIGINT">BIGINT</option>
-      <option value="TINYINT">TINYINT</option>
-      <option value="SMALLINT">SMALLINT</option>
-      <option value="MEDIUMINT">MEDIUMINT</option>
-      <option value="VARCHAR" selected>VARCHAR</option>
-      <option value="CHAR">CHAR</option>
-      <option value="TEXT">TEXT</option>
-      <option value="LONGTEXT">LONGTEXT</option>
-      <option value="MEDIUMTEXT">MEDIUMTEXT</option>
-      <option value="TINYTEXT">TINYTEXT</option>
-      <option value="DATE">DATE</option>
-      <option value="DATETIME">DATETIME</option>
-      <option value="TIMESTAMP">TIMESTAMP</option>
-      <option value="TIME">TIME</option>
-      <option value="YEAR">YEAR</option>
-      <option value="DECIMAL">DECIMAL</option>
-      <option value="FLOAT">FLOAT</option>
-      <option value="DOUBLE">DOUBLE</option>
-      <option value="BOOLEAN">BOOLEAN</option>
-      <option value="ENUM">ENUM</option>
-      <option value="JSON">JSON</option>
-      <option value="BLOB">BLOB</option>
-    </select>
-    <input type="text" name="colLength[]" placeholder="255" class="length-input" />
-    <input type="checkbox" name="colPrimary[]" value="${columnIndex}" style="width: auto; height: 18px;" />
-    <input type="checkbox" name="colNullable[]" value="${columnIndex}" style="width: auto; height: 18px;" checked />
-    <input type="checkbox" name="colAutoInc[]" value="${columnIndex}" style="width: auto; height: 18px;" />
-    <input type="text" name="colDefault[]" placeholder="NULL" />
-    <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.remove()">×</button>
+    <div class="form-group" style="margin: 0;">
+      <input type="text" name="colName[]" placeholder="column_name" required />
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <select name="colType[]" required onchange="toggleLength(this)">
+        <option value="INT">INT</option>
+        <option value="BIGINT">BIGINT</option>
+        <option value="TINYINT">TINYINT</option>
+        <option value="SMALLINT">SMALLINT</option>
+        <option value="MEDIUMINT">MEDIUMINT</option>
+        <option value="VARCHAR" selected>VARCHAR</option>
+        <option value="CHAR">CHAR</option>
+        <option value="TEXT">TEXT</option>
+        <option value="LONGTEXT">LONGTEXT</option>
+        <option value="MEDIUMTEXT">MEDIUMTEXT</option>
+        <option value="TINYTEXT">TINYTEXT</option>
+        <option value="DATE">DATE</option>
+        <option value="DATETIME">DATETIME</option>
+        <option value="TIMESTAMP">TIMESTAMP</option>
+        <option value="TIME">TIME</option>
+        <option value="YEAR">YEAR</option>
+        <option value="DECIMAL">DECIMAL</option>
+        <option value="FLOAT">FLOAT</option>
+        <option value="DOUBLE">DOUBLE</option>
+        <option value="BOOLEAN">BOOLEAN</option>
+        <option value="ENUM">ENUM</option>
+        <option value="JSON">JSON</option>
+        <option value="BLOB">BLOB</option>
+      </select>
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <input type="text" name="colLength[]" placeholder="255" class="length-input" />
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <input type="checkbox" name="colPrimary[]" value="${columnIndex}" style="width: auto; height: 18px;" />
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <input type="checkbox" name="colNullable[]" value="${columnIndex}" style="width: auto; height: 18px;" checked />
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <input type="checkbox" name="colAutoInc[]" value="${columnIndex}" style="width: auto; height: 18px;" />
+    </div>
+    <div class="form-group" style="margin: 0;">
+      <input type="text" name="colDefault[]" placeholder="NULL" />
+    </div>
+    <div>
+      <button type="button" class="btn btn-sm btn-danger" onclick="this.parentElement.parentElement.remove()">×</button>
+    </div>
   `;
   container.appendChild(div);
 }

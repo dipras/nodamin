@@ -9,7 +9,7 @@ Nodamin is a web-based database administration tool inspired by [Adminer](https:
 ## ✨ Features
 
 - 🚀 **Zero Configuration** - Instantly run via `npx` with no setup required.
-- 🔌 **Multiple Database Support** - MySQL & SQLite (Available), PostgreSQL, MongoDB (Planned)
+- 🔌 **Multiple SQL Database Support** - MySQL & SQLite available, with PostgreSQL planned.
 - 🎨 **Simple & Clean UI** - Toggle between Light and Dark themes.
 - ⚙️ **Custom Host & Port** - Configure binding ports and hosts via CLI or environment variables.
 - 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, and drop tables/rows.
@@ -128,36 +128,54 @@ src/
 
 ## 🗺️ Roadmap
 
-### Database Drivers
-- [ ] **PostgreSQL** - Second priority after MySQL
-- [x] **SQLite** - File-based & In-Memory database support ✅
-- [ ] **MariaDB** - Should be easy since it's MySQL-compatible
-- [ ] **MongoDB** - NoSQL support with collection/document view
-- [ ] **Microsoft SQL Server** - Enterprise database support
-- [ ] **Redis** - Key-value store browser
+Nodamin is focused on becoming a fast, reliable SQL database admin for local development and
+trusted environments. The roadmap prioritizes a strong daily SQL workflow before adding more
+database engines.
 
-### Features
-- [x] **Export** - Export table/query results to SQL dump ✅
-- [x] **Import** - Import SQL files ✅
-- [x] **Table creation** - Create table with GUI (columns, types, constraints) ✅
-- [x] **Dark/Light theme toggle** ✅
-- [x] **Bulk actions** - Select and operate on multiple tables/rows ✅
-- [ ] **Alter table** - Add/modify/drop columns via GUI
-- [ ] **Index management** - Create/drop indexes
-- [ ] **Foreign key viewer** - View and manage foreign key relationships
-- [ ] **Export to CSV/JSON** - Additional export formats
-- [ ] **Query history** - Save and recall previous SQL queries
-- [ ] **Multiple connections** - Save and switch between database connections
-- [ ] **Keyboard shortcuts** - Quick navigation
-- [ ] **Query autocomplete** - Basic SQL autocomplete in query editor
-- [ ] **Table search/filter** - Filter tables in sidebar
-- [ ] **Column-level filtering** - Filter data by column value
-- [ ] **Stored procedures/functions** - View and execute
-- [ ] **User/privileges management** - Manage database users
-- [ ] **ERD viewer** - Visual entity relationship diagram
-- [ ] **Connection via URL** - Support connection string format (e.g., `mysql://user:pass@host:port/db`)
-- [ ] **Authentication** - Optional login to protect the admin panel
-- [x] **npx support** - Run directly with `npx @dipras/nodamin`
+### 1. Reliability and SQL Safety
+
+- [ ] Expand integration tests for CRUD, pagination, sorting, import, and export
+- [ ] Add shared driver conformance tests for MySQL and SQLite
+- [ ] Improve SQL import parsing for quoted delimiters, triggers, and procedures
+- [ ] Add query timeout and cancellation controls
+- [ ] Add an optional read-only mode for safer database inspection
+- [ ] Improve destructive-action confirmations and error recovery
+
+### 2. Daily Query Workflow
+
+- [ ] Save and switch between multiple connections
+- [ ] Connect with database URLs such as `mysql://` and `postgresql://`
+- [ ] Add query history, saved queries, and reusable snippets
+- [ ] Add SQL autocomplete for schemas, tables, columns, and keywords
+- [ ] Add keyboard shortcuts and a better query editor experience
+- [ ] Export query results and table data to CSV and JSON
+- [ ] Add table search and column-level data filters
+- [ ] Add `EXPLAIN` and query-plan viewing
+
+### 3. Schema Management
+
+- [ ] Alter tables from the UI: add, modify, rename, and drop columns
+- [ ] Create, inspect, and drop indexes and unique constraints
+- [ ] Inspect and manage foreign keys
+- [ ] Add an ERD viewer based on foreign-key relationships
+- [ ] Browse and manage views
+- [ ] Browse triggers, stored procedures, and functions where supported
+
+### 4. SQL Database Drivers
+
+- [x] **MySQL** - Primary supported server database
+- [x] **SQLite** - File-based and in-memory database support
+- [ ] **PostgreSQL** - Next full driver, including schemas and PostgreSQL metadata
+- [ ] **MariaDB** - Verify and document compatibility beyond the MySQL protocol
+- [ ] **Microsoft SQL Server** - Later, after the shared SQL capabilities are stable
+
+### 5. Administration and Deployment
+
+- [ ] Inspect and manage database users, roles, and privileges where supported
+- [ ] Add optional authentication for deployments outside localhost
+- [ ] Add configurable session, cookie, proxy, and TLS security settings
+- [ ] Add connection health, server information, and basic activity views
+- [ ] Document safe localhost, trusted-network, and reverse-proxy deployment modes
 
 ## 📝 License
 

@@ -1,40 +1,79 @@
-<h1>📦 Databases</h1>
+<div class="page-heading database-heading">
+  <div>
+    <span class="eyebrow">Workspace</span>
+    <h1>Databases</h1>
+    <p class="page-description"><%= data.databases.length %> database<%= data.databases.length === 1 ? '' : 's' %> available on this connection.</p>
+  </div>
+  <% if (data.readOnly) { %>
+    <span class="badge badge-readonly">🔒 Read-only</span>
+  <% } %>
+</div>
 <% if (data.message) { %>
   <div class="msg msg-success"><%= data.message %></div>
 <% } %>
 <% if (data.error) { %>
   <div class="msg msg-error"><%= data.error %></div>
 <% } %>
-<div class="actions">
+<div class="database-actions">
+  <div class="actions-primary">
   <% if (!data.readOnly) { %>
     <button class="btn btn-primary" onclick="showModal('createDb')">+ Create Database</button>
-  <% } else { %>
-    <span class="badge">🔒 Read-only</span>
   <% } %>
-  <form method="POST" action="/disconnect" style="display:inline">
-    <button type="submit" class="btn btn-danger">Disconnect</button>
+    <a href="/sql" class="btn">SQL Query</a>
+  </div>
+  <form method="POST" action="/disconnect">
+    <button type="submit" class="btn btn-quiet">Disconnect</button>
   </form>
-  <a href="/sql" class="btn">📝 SQL Query</a>
 </div>
-<div class="grid-2">
+
+<div class="database-toolbar" aria-label="Database controls">
+  <label class="search-field">
+    <span class="search-icon" aria-hidden="true">⌕</span>
+    <span class="sr-only">Search databases</span>
+    <input id="database-search" type="search" placeholder="Search databases…" autocomplete="off">
+  </label>
+  <label class="sort-field">
+    <span>Sort by</span>
+    <select id="database-sort" aria-label="Sort databases">
+      <option value="name-asc">Name A–Z</option>
+      <option value="name-desc">Name Z–A</option>
+      <option value="recent">Recently opened</option>
+    </select>
+  </label>
+</div>
+
+<div class="database-grid" id="database-grid">
   <% data.databases.forEach(function(db) { %>
-    <div class="stat">
-      <div class="label"><a href="/db/<%= encodeURIComponent(db) %>"><%= db %></a></div>
-      <div style="display:flex;gap:8px;margin-top:8px;">
-        <a href="/db/<%= encodeURIComponent(db) %>" class="btn btn-sm">Open</a>
-        <% if (!data.readOnly) { %>
-          <button type="button" class="btn btn-sm btn-danger destructive-action"
-            data-action="Drop database" data-confirmation="<%= db %>"
-            data-url="/db/<%= encodeURIComponent(db) %>/drop">Drop</button>
-        <% } %>
-      </div>
-    </div>
+    <article class="database-card" data-database-card data-name="<%= db.toLocaleLowerCase() %>" data-database="<%= db %>">
+      <a class="database-card-link" href="/db/<%= encodeURIComponent(db) %>" data-database-link="<%= db %>">
+        <span class="database-icon" aria-hidden="true">🗄️</span>
+        <span class="database-card-copy">
+          <strong><%= db %></strong>
+          <small>Database</small>
+        </span>
+        <span class="database-open" aria-hidden="true">Open <span>→</span></span>
+      </a>
+      <% if (!data.readOnly) { %>
+        <details class="action-menu">
+          <summary aria-label="Actions for <%= db %>" title="Database actions">•••</summary>
+          <div class="action-menu-popover">
+            <button type="button" class="menu-danger destructive-action"
+              data-action="Drop database" data-confirmation="<%= db %>"
+              data-url="/db/<%= encodeURIComponent(db) %>/drop">Drop database</button>
+          </div>
+        </details>
+      <% } %>
+    </article>
   <% }); %>
 </div>
+<div class="empty database-empty" id="database-empty" hidden>No databases match your search.</div>
+<% if (data.databases.length === 0) { %>
+  <div class="empty">No databases found on this connection.</div>
+<% } %>
 <% if (!data.readOnly) { %>
 <div class="modal-overlay" id="createDb">
-  <div class="modal">
-    <h2>Create Database</h2>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="createDbTitle">
+    <h2 id="createDbTitle">Create Database</h2>
     <form method="POST" action="/db/create">
       <div class="form-group">
         <label>Database Name</label>

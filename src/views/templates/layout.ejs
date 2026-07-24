@@ -19,7 +19,24 @@
       <% if (data.sidebar) { %>
         <aside class="sidebar"><%- data.sidebar %></aside>
       <% } %>
-      <div class="content"><%- data.content %></div>
+      <main class="content">
+        <% if (data.breadcrumbs && data.breadcrumbs.length) { %>
+          <nav class="breadcrumbs" aria-label="Breadcrumb">
+            <ol>
+              <% data.breadcrumbs.forEach(function(item, index) { %>
+                <li>
+                  <% if (item.href) { %>
+                    <a href="<%= item.href %>"><%= item.label %></a>
+                  <% } else { %>
+                    <span aria-current="page"><%= item.label %></span>
+                  <% } %>
+                </li>
+              <% }); %>
+            </ol>
+          </nav>
+        <% } %>
+        <%- data.content %>
+      </main>
     </div>
   </div>
   <script><%- data.js %></script>

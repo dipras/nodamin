@@ -22,8 +22,18 @@ function render<T extends object>(fn: CompiledTemplate, data: T): string {
   return output;
 }
 
-function layout(title: string, content: string, sidebar: string = ""): string {
-  return render(compiled.layout, { title, content, sidebar, css: CSS, js: JS });
+interface Breadcrumb {
+  label: string;
+  href?: string;
+}
+
+function layout(
+  title: string,
+  content: string,
+  sidebar: string = "",
+  breadcrumbs: Breadcrumb[] = []
+): string {
+  return render(compiled.layout, { title, content, sidebar, breadcrumbs, css: CSS, js: JS });
 }
 
 type SidebarTable = Pick<TableInfo, "name">;
@@ -46,6 +56,26 @@ function tableSidebar(database: string, tables: SidebarTable[]): string {
       name,
     })),
   });
+}
+
+function databaseBreadcrumbs(database: string, current?: string): Breadcrumb[] {
+  const databaseHref = `/db/${encodeURIComponent(database)}`;
+  return [
+    { label: "Databases", href: "/" },
+    { label: database, ...(current ? { href: databaseHref } : {}) },
+    ...(current ? [{ label: current }] : []),
+  ];
+}
+
+function tableBreadcrumbs(database: string, table: string, current?: string): Breadcrumb[] {
+  const databaseHref = `/db/${encodeURIComponent(database)}`;
+  const tableHref = `${databaseHref}/table/${encodeURIComponent(table)}`;
+  return [
+    { label: "Databases", href: "/" },
+    { label: database, href: databaseHref },
+    { label: table, ...(current ? { href: tableHref } : {}) },
+    ...(current ? [{ label: current }] : []),
+  ];
 }
 
 interface TableListPageProps {
@@ -144,13 +174,13 @@ export function tableListPage({
   readOnly = false,
 }: TableListPageProps): string {
   const content = render(compiled.tableList, { database, tables, message, error, readOnly });
-  return layout(database, content, tableSidebar(database, tables));
+  return layout(database, content, tableSidebar(database, tables), databaseBreadcrumbs(database));
 }
 
 export function tableDataPage(props: TableDataPageProps): string {
   const content = render(compiled.tableData, props);
   const { database, table } = props;
-  return layout(`${table} - ${database}`, content);
+  return layout(`${table} - ${database}`, content, "", tableBreadcrumbs(database, table));
 }
 
 export function tableStructurePage({
@@ -160,7 +190,12 @@ export function tableStructurePage({
   tables,
 }: TableStructurePageProps): string {
   const content = render(compiled.tableStructure, { database, table, columns });
-  return layout(`Structure: ${table}`, content, tableSidebar(database, tables));
+  return layout(
+    `Structure: ${table}`,
+    content,
+    tableSidebar(database, tables),
+    tableBreadcrumbs(database, table, "Structure")
+  );
 }
 
 export function insertPage({
@@ -171,7 +206,12 @@ export function insertPage({
   error,
 }: InsertPageProps): string {
   const content = render(compiled.insert, { database, table, columns, error });
-  return layout(`Insert - ${table}`, content, tableSidebar(database, tables));
+  return layout(
+    `Insert - ${table}`,
+    content,
+    tableSidebar(database, tables),
+    tableBreadcrumbs(database, table, "Insert row")
+  );
 }
 
 export function editPage({
@@ -183,7 +223,12 @@ export function editPage({
   error,
 }: EditPageProps): string {
   const content = render(compiled.edit, { database, table, columns, row, error });
-  return layout(`Edit - ${table}`, content, tableSidebar(database, tables));
+  return layout(
+    `Edit - ${table}`,
+    content,
+    tableSidebar(database, tables),
+    tableBreadcrumbs(database, table, "Edit row")
+  );
 }
 
 export function sqlPage({
@@ -204,7 +249,14 @@ export function sqlPage({
     queryTimeoutMs,
     canCancel,
   });
-  return layout("SQL Query", content, sidebar);
+  return layout(
+    "SQL Query",
+    content,
+    sidebar,
+    database
+      ? databaseBreadcrumbs(database, "SQL Query")
+      : [{ label: "Databases", href: "/" }, { label: "SQL Query" }]
+  );
 }
 
 export function errorPage(title: string, message: string, backUrl: string = "/"): string {
@@ -218,7 +270,12 @@ export function createTablePage(
   error?: string
 ): string {
   const content = render(compiled.createTable, { database, error });
-  return layout(`Create Table - ${database}`, content, tableSidebar(database, tables));
+  return layout(
+    `Create Table - ${database}`,
+    content,
+    tableSidebar(database, tables),
+    databaseBreadcrumbs(database, "Create table")
+  );
 }
 
 export function exportPage({
@@ -229,7 +286,12 @@ export function exportPage({
   preview = false,
 }: ExportTablePageProps): string {
   const content = render(compiled.exportTable, { database, table, dump, preview });
-  return layout(`Export - ${table}`, content, tableSidebar(database, tables));
+  return layout(
+    `Export - ${table}`,
+    content,
+    tableSidebar(database, tables),
+    tableBreadcrumbs(database, table, "Export")
+  );
 }
 
 export function exportDatabasePage({
@@ -239,7 +301,12 @@ export function exportDatabasePage({
   preview = false,
 }: ExportDatabasePageProps): string {
   const content = render(compiled.exportDatabase, { database, dump, preview });
-  return layout(`Export - ${database}`, content, tableSidebar(database, tables));
+  return layout(
+    `Export - ${database}`,
+    content,
+    tableSidebar(database, tables),
+    databaseBreadcrumbs(database, "Export")
+  );
 }
 
 export function importPage({
@@ -249,5 +316,10 @@ export function importPage({
   error,
 }: ImportPageProps): string {
   const content = render(compiled.importSQL, { database, result, error });
-  return layout(`Import - ${database}`, content, tableSidebar(database, tables));
+  return layout(
+    `Import - ${database}`,
+    content,
+    tableSidebar(database, tables),
+    databaseBreadcrumbs(database, "Import SQL")
+  );
 }

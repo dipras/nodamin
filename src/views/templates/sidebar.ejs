@@ -1,4 +1,18 @@
-<h3><%= data.title %> (<%= data.items.length %>)</h3>
-<% data.items.forEach(function(item) { %>
-  <a href="<%= item.href %>"><%= item.name %></a>
-<% }); %>
+<div class="sidebar-heading">
+  <h3><%= data.title %></h3>
+  <span><%= data.items.length %></span>
+</div>
+<label class="sidebar-search">
+  <span aria-hidden="true">⌕</span>
+  <span class="sr-only">Search <%= data.title.toLocaleLowerCase() %></span>
+  <input type="search" placeholder="Search <%= data.title.toLocaleLowerCase() %>…" data-sidebar-search autocomplete="off">
+</label>
+<nav class="sidebar-list" aria-label="<%= data.title %>">
+  <% data.items.forEach(function(item) { %>
+    <a href="<%= item.href %>" data-sidebar-item data-label="<%= item.name.toLocaleLowerCase() %>">
+      <span class="sidebar-item-icon" aria-hidden="true"><%= data.title === 'Databases' ? '◉' : '▦' %></span>
+      <span><%= item.name %></span>
+    </a>
+  <% }); %>
+</nav>
+<p class="sidebar-empty" data-sidebar-empty hidden>No matches found</p>

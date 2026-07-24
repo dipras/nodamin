@@ -9,7 +9,7 @@ Nodamin is a web-based database administration tool inspired by [Adminer](https:
 ## ✨ Features
 
 - 🚀 **Zero Configuration** - Instantly run via `npx` with no setup required.
-- 🔌 **Multiple SQL Database Support** - MySQL & SQLite available, with PostgreSQL planned.
+- 🔌 **Multiple SQL Database Support** - MySQL, MariaDB, and SQLite available, with PostgreSQL planned.
 - 🎨 **Simple & Clean UI** - Toggle between Light and Dark themes.
 - ⚙️ **Custom Host & Port** - Configure binding ports and hosts via CLI or environment variables.
 - 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, and drop tables/rows.
@@ -33,7 +33,7 @@ npx @dipras/nodamin
 npx @dipras/nodamin --port 8080 --host 127.0.0.1
 ```
 
-Open your browser to the URL displayed in your terminal (default: `http://localhost:3088`) and connect to your MySQL or SQLite database.
+Open your browser to the URL displayed in your terminal (default: `http://localhost:3088`) and connect to your MySQL, MariaDB, or SQLite database.
 
 <details>
 <summary><b>🛠️ Install from Source (Manual)</b></summary>
@@ -58,7 +58,7 @@ npm start
 - You can upload an existing `.db` file directly via the UI.
 - Selecting the **Create New** option will provision a temporary **In-Memory** database (data is lost upon server restart). This is perfect for quick testing and prototyping.
 - SQLite runs synchronously in-process, so live query timeout and cancellation are only available
-  for MySQL connections.
+  for MySQL and MariaDB connections.
 
 ### Connection Safety
 
@@ -66,11 +66,12 @@ The connection form provides two optional safety controls:
 
 - **Read-only mode** blocks CRUD, DDL, import, and mutating raw SQL. Uploaded SQLite databases are
   also opened with SQLite's native read-only flag.
-- **Query timeout** sets the default limit for raw MySQL queries. The SQL editor keeps running
-  queries attached to a query ID and exposes a Cancel button that interrupts the active MySQL query.
+- **Query timeout** sets the default limit for raw MySQL/MariaDB queries. The SQL editor keeps
+  running queries attached to a query ID and exposes a Cancel button that interrupts the active
+  server query.
 
 Dropping databases/tables, truncating tables, and deleting rows require typed confirmation. SQL
-imports stop on the first MySQL error; SQLite imports use native script parsing and roll back the
+imports stop on the first MySQL/MariaDB error; SQLite imports use native script parsing and roll back the
 script on failure unless the script explicitly manages its own transaction.
 
 ## 🛠️ Configuration & CLI Variables
@@ -114,7 +115,7 @@ src/
 ├── db/
 │   ├── driver.ts      # Shared database contract
 │   ├── index.ts       # Per-session driver facade
-│   ├── mysql.ts       # MySQL driver
+│   ├── mysql.ts       # Shared MySQL/MariaDB protocol driver
 │   └── sqlite.ts      # SQLite driver
 └── views/
     ├── pages.ts       # View-model and rendering
@@ -123,7 +124,7 @@ src/
     └── scripts.js     # Embedded browser behavior
 ```
 
-## 📋 Current MySQL Features
+## 📋 Current MySQL & MariaDB Features
 
 - ✅ Connect / Disconnect
 - ✅ List databases
@@ -183,7 +184,7 @@ database engines.
 - [x] **MySQL** - Primary supported server database
 - [x] **SQLite** - File-based and in-memory database support
 - [ ] **PostgreSQL** - Next full driver, including schemas and PostgreSQL metadata
-- [ ] **MariaDB** - Verify and document compatibility beyond the MySQL protocol
+- [x] **MariaDB** - First-class connection type over the shared MySQL protocol driver
 - [ ] **Microsoft SQL Server** - Later, after the shared SQL capabilities are stable
 
 ### 5. Administration and Deployment

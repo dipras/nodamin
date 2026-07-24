@@ -127,6 +127,8 @@ test("SQLite satisfies the shared database driver contract", async () => {
 
 const mysqlHost = process.env["NODAMIN_TEST_MYSQL_HOST"];
 const mysqlDatabase = process.env["NODAMIN_TEST_MYSQL_DATABASE"];
+const mariadbHost = process.env["NODAMIN_TEST_MARIADB_HOST"];
+const mariadbDatabase = process.env["NODAMIN_TEST_MARIADB_DATABASE"];
 
 test("MySQL satisfies the shared database driver contract", {
   skip: !mysqlHost || !mysqlDatabase
@@ -144,6 +146,26 @@ test("MySQL satisfies the shared database driver contract", {
       port: Number(process.env["NODAMIN_TEST_MYSQL_PORT"] ?? 3306),
       user: process.env["NODAMIN_TEST_MYSQL_USER"] ?? "root",
       password: process.env["NODAMIN_TEST_MYSQL_PASSWORD"] ?? "",
+    },
+  });
+});
+
+test("MariaDB satisfies the shared server database driver contract", {
+  skip: !mariadbHost || !mariadbDatabase
+    ? "Set NODAMIN_TEST_MARIADB_HOST and NODAMIN_TEST_MARIADB_DATABASE to run"
+    : false,
+}, async () => {
+  await assertDriverConformance({
+    driver: new MySQLDriver(),
+    database: mariadbDatabase!,
+    connection: {
+      id: "mariadb-conformance",
+      name: "mariadb-conformance",
+      type: "mariadb",
+      host: mariadbHost!,
+      port: Number(process.env["NODAMIN_TEST_MARIADB_PORT"] ?? 3306),
+      user: process.env["NODAMIN_TEST_MARIADB_USER"] ?? "root",
+      password: process.env["NODAMIN_TEST_MARIADB_PASSWORD"] ?? "",
     },
   });
 });

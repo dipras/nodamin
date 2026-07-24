@@ -4,7 +4,7 @@ import * as db from "../src/db/index.js";
 import { parseConnectionUrl } from "../src/routes/connection.js";
 import * as views from "../src/views/pages.js";
 
-test("MySQL connection URLs are parsed without exposing the password in the label", () => {
+test("MySQL and MariaDB URLs are parsed without exposing passwords in labels", () => {
   const connection = parseConnectionUrl(
     "mysql://dev:p%40ss@db.example.test:3307/app%20db"
   );
@@ -16,10 +16,33 @@ test("MySQL connection URLs are parsed without exposing the password in the labe
   assert.equal(connection.database, "app db");
   assert.equal(connection.name, "dev@db.example.test:3307/app db");
   assert.doesNotMatch(connection.name, /p@ss/);
+  const mariaConnection = parseConnectionUrl(
+    "mariadb://admin:secret@maria.example.test/inventory"
+  );
+  assert.equal(mariaConnection.type, "mariadb");
+  assert.equal(mariaConnection.port, 3306);
+  assert.equal(mariaConnection.database, "inventory");
+  assert.doesNotMatch(mariaConnection.name, /secret/);
   assert.throws(
     () => parseConnectionUrl("postgresql://localhost/app"),
     /PostgreSQL driver/
   );
+});
+
+test("MariaDB is routed through the server-protocol driver and shown in the connection UI", () => {
+  const sessionId = "mariadb-driver-selection";
+  db.connect(sessionId, {
+    id: "maria",
+    name: "MariaDB",
+    type: "mariadb",
+    host: "localhost",
+  });
+  assert.equal(db.getConnection(sessionId)?.type, "mariadb");
+  db.disconnect(sessionId);
+
+  const html = views.loginPage();
+  assert.match(html, /option value="mariadb">MariaDB/);
+  assert.match(html, /mariadb:\/\/ URLs/);
 });
 
 test("a session can switch between isolated active connections", async () => {

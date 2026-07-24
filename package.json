@@ -1,12 +1,13 @@
 {
   "name": "@dipras/nodamin",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Lightweight Database Admin for Node.js",
   "keywords": [
     "database",
     "database-admin",
     "db-admin",
     "mysql",
+    "mariadb",
     "mysql-admin",
     "mysql-gui",
     "mysql-web",

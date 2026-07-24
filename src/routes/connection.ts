@@ -5,7 +5,7 @@ import type { File } from "formidable";
 import * as db from "../db/index.js";
 import { get, post, redirect, sendHtml } from "../router.js";
 import { clearSessionCookie, createSession, destroySession } from "../session.js";
-import type { DbConnection, RouteContext } from "../types.js";
+import type { DatabaseType, DbConnection, RouteContext } from "../types.js";
 import * as views from "../views/pages.js";
 import { cleanupTemporaryFile, requireConfirmation } from "./shared.js";
 
@@ -55,7 +55,7 @@ export function registerConnectionRoutes(): void {
       const connectionUrl = String(ctx.body["connectionUrl"] ?? "").trim();
       const parsedUrl = connectionUrl ? parseConnectionUrl(connectionUrl) : null;
       const dbType = parsedUrl?.type
-        ?? (((ctx.body["type"] as string) ?? "mysql") as "mysql" | "sqlite");
+        ?? normalizeDatabaseType(ctx.body["type"]);
       const sqliteMode = ctx.body["sqliteMode"] as string;
       const readOnly = ctx.body["readOnly"] === "1";
       const queryTimeoutMs = normalizeQueryTimeout(ctx.body["queryTimeoutMs"]);
@@ -94,7 +94,7 @@ export function registerConnectionRoutes(): void {
         conn = parsedUrl ?? {
           id: randomUUID(),
           name: `${user ?? "root"}@${host ?? "localhost"}:${port ?? "3306"}`,
-          type: "mysql",
+          type: dbType,
           host: host ?? "localhost",
           port: Number(port) || 3306,
           user: user ?? "root",
@@ -130,9 +130,10 @@ export function registerConnectionRoutes(): void {
       console.error("[Connect Error]:", err);
       const message = err instanceof Error && (
         err.message === "Invalid database URL."
-        || err.message.startsWith("Only mysql://")
+        || err.message.startsWith("Only mysql:// and mariadb://")
         || err.message.startsWith("PostgreSQL URLs")
         || err.message.startsWith("The database URL")
+        || err.message.startsWith("Unsupported database type:")
       )
         ? err.message
         : "Internal error occurred during connection. Check server logs.";
@@ -183,8 +184,8 @@ export function parseConnectionUrl(value: string): DbConnection {
   if (url.protocol === "postgres:" || url.protocol === "postgresql:") {
     throw new Error("PostgreSQL URLs require the PostgreSQL driver, which is not supported yet.");
   }
-  if (url.protocol !== "mysql:") {
-    throw new Error("Only mysql:// database URLs are currently supported.");
+  if (url.protocol !== "mysql:" && url.protocol !== "mariadb:") {
+    throw new Error("Only mysql:// and mariadb:// database URLs are currently supported.");
   }
   if (!url.hostname) throw new Error("The database URL must include a host.");
   const user = decodeURIComponent(url.username || "root");
@@ -193,13 +194,19 @@ export function parseConnectionUrl(value: string): DbConnection {
   return {
     id: randomUUID(),
     name: `${user}@${url.hostname}:${port}${database ? `/${database}` : ""}`,
-    type: "mysql",
+    type: url.protocol === "mariadb:" ? "mariadb" : "mysql",
     host: url.hostname,
     port,
     user,
     password: decodeURIComponent(url.password),
     ...(database ? { database } : {}),
   };
+}
+
+function normalizeDatabaseType(value: unknown): DatabaseType {
+  const type = String(value ?? "mysql");
+  if (type === "mysql" || type === "mariadb" || type === "sqlite") return type;
+  throw new Error(`Unsupported database type: ${type}`);
 }
 
 function normalizeQueryTimeout(value: unknown): number {

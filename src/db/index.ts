@@ -1,7 +1,7 @@
 // ============================================================
 // Nodamin - Database Driver Manager
 // ============================================================
-// Facade that delegates to per-session database drivers (MySQL or SQLite).
+// Facade that delegates to per-session database drivers (MySQL, MariaDB, or SQLite).
 // Each session has its own isolated database connection.
 
 import type { DatabaseDriver } from "./driver.js";
@@ -30,6 +30,7 @@ const sessionDrivers = new Map<string, SessionDrivers>();
 function getDriverForType(type: string): DatabaseDriver {
     switch (type) {
         case "mysql":
+        case "mariadb":
             return new MySQLDriver();
         case "sqlite":
             return new SQLiteDriver();

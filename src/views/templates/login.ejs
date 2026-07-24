@@ -11,17 +11,18 @@
             <label>Database URL (optional)</label>
             <input type="url" name="connectionUrl" placeholder="mysql://user:password@localhost:3306/database"
               style="width:100%">
-            <small style="color:var(--text-muted,#888);">When set, this overrides the MySQL fields below.</small>
+            <small style="color:var(--text-muted,#888);">Supports mysql:// and mariadb:// URLs and overrides the server fields below.</small>
           </div>
           <div class="form-group">
             <label>Database Type</label>
             <select name="type" id="dbType" style="width:100%" onchange="toggleDbFields()">
               <option value="mysql">MySQL</option>
+              <option value="mariadb">MariaDB</option>
               <option value="sqlite">SQLite</option>
             </select>
           </div>
 
-          <!-- MySQL fields -->
+          <!-- MySQL/MariaDB fields -->
           <div id="mysqlFields">
             <div class="form-row">
               <div class="form-group">

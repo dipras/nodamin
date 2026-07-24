@@ -1,5 +1,5 @@
 // ============================================================
-// Nodamin - MySQL Database Driver
+// Nodamin - Shared MySQL/MariaDB Protocol Driver
 // ============================================================
 
 import mysql from "mysql2/promise";

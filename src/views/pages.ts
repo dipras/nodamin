@@ -4,14 +4,114 @@
 
 import * as compiled from "./compiled.js";
 import { CSS, JS } from "./assets.js";
+import type { ColumnInfo, QueryResult, TableInfo } from "../types.js";
 
 // Wrapper to call EJS compiled functions (they expect 4 params: data, escapeFn, include, rethrow)
-function render(fn: Function, data: any): string {
-  return fn(data, undefined, undefined, undefined);
+type CompiledTemplate = (
+  data: unknown,
+  escapeFn: undefined,
+  include: undefined,
+  rethrow: undefined
+) => string | undefined;
+
+function render<T extends object>(fn: CompiledTemplate, data: T): string {
+  const output = fn(data, undefined, undefined, undefined);
+  if (output === undefined) {
+    throw new Error("Compiled template returned no output");
+  }
+  return output;
 }
 
 function layout(title: string, content: string, sidebar: string = ""): string {
   return render(compiled.layout, { title, content, sidebar, css: CSS, js: JS });
+}
+
+type SidebarTable = Pick<TableInfo, "name">;
+
+function databaseSidebar(databases: string[]): string {
+  return render(compiled.sidebar, {
+    title: "Databases",
+    items: databases.map((database) => ({
+      href: `/db/${encodeURIComponent(database)}`,
+      name: database,
+    })),
+  });
+}
+
+function tableSidebar(database: string, tables: SidebarTable[]): string {
+  return render(compiled.sidebar, {
+    title: "Tables",
+    items: tables.map(({ name }) => ({
+      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(name)}`,
+      name,
+    })),
+  });
+}
+
+interface TableListPageProps {
+  database: string;
+  tables: TableInfo[];
+  message?: string;
+  error?: string;
+}
+
+interface TableDataPageProps {
+  database: string;
+  table: string;
+  fields: string[];
+  rows: Record<string, unknown>[];
+  total: number;
+  page: number;
+  perPage: number;
+  primaryKeys: string[];
+  sort?: string;
+  order?: string;
+  message?: string;
+  error?: string;
+}
+
+interface TableStructurePageProps {
+  database: string;
+  table: string;
+  columns: ColumnInfo[];
+  tables: SidebarTable[];
+}
+
+interface InsertPageProps extends TableStructurePageProps {
+  error?: string;
+}
+
+interface EditPageProps extends InsertPageProps {
+  row: Record<string, unknown>;
+}
+
+interface SqlPageProps {
+  database: string | null;
+  tables: SidebarTable[];
+  result?: QueryResult;
+  sql?: string;
+}
+
+interface ExportTablePageProps {
+  database: string;
+  table: string;
+  dump: string;
+  tables: SidebarTable[];
+  preview?: boolean;
+}
+
+interface ExportDatabasePageProps {
+  database: string;
+  dump: string;
+  tables: SidebarTable[];
+  preview?: boolean;
+}
+
+interface ImportPageProps {
+  database: string;
+  tables: SidebarTable[];
+  result?: Required<Pick<QueryResult, "message">>;
+  error?: string;
 }
 
 // ---- Page Renderers ----
@@ -23,142 +123,68 @@ export function loginPage(error?: string): string {
 
 export function databaseListPage(
   databases: string[],
-  connName: string,
   message?: string
 ): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Databases",
-    items: databases.map((db) => ({
-      href: `/db/${encodeURIComponent(db)}`,
-      name: db,
-    })),
-  });
-
   const content = render(compiled.databaseList, { databases, message });
-  return layout("Databases", content, sidebar);
+  return layout("Databases", content, databaseSidebar(databases));
 }
 
-export function tableListPage(
-  database: string,
-  tables: { name: string; engine: string; rows: number; size: string; collation: string }[],
-  message?: string,
-  error?: string
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
-
+export function tableListPage({
+  database,
+  tables,
+  message,
+  error,
+}: TableListPageProps): string {
   const content = render(compiled.tableList, { database, tables, message, error });
-  return layout(database, content, sidebar);
+  return layout(database, content, tableSidebar(database, tables));
 }
 
-export function tableDataPage(
-  database: string,
-  table: string,
-  fields: string[],
-  rows: Record<string, unknown>[],
-  total: number,
-  page: number,
-  perPage: number,
-  primaryKeys: string[],
-  sort?: string,
-  order?: string,
-  message?: string,
-  error?: string
-): string {
-  const content = render(compiled.tableData, {
-    database,
-    table,
-    fields,
-    rows,
-    total,
-    page,
-    perPage,
-    primaryKeys,
-    sort,
-    order,
-    message,
-    error,
-  });
+export function tableDataPage(props: TableDataPageProps): string {
+  const content = render(compiled.tableData, props);
+  const { database, table } = props;
   return layout(`${table} - ${database}`, content);
 }
 
-export function tableStructurePage(
-  database: string,
-  table: string,
-  columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
-  tables: { name: string }[]
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function tableStructurePage({
+  database,
+  table,
+  columns,
+  tables,
+}: TableStructurePageProps): string {
   const content = render(compiled.tableStructure, { database, table, columns });
-  return layout(`Structure: ${table}`, content, sidebar);
+  return layout(`Structure: ${table}`, content, tableSidebar(database, tables));
 }
 
-export function insertPage(
-  database: string,
-  table: string,
-  columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
-  tables: { name: string }[],
-  error?: string
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function insertPage({
+  database,
+  table,
+  columns,
+  tables,
+  error,
+}: InsertPageProps): string {
   const content = render(compiled.insert, { database, table, columns, error });
-  return layout(`Insert - ${table}`, content, sidebar);
+  return layout(`Insert - ${table}`, content, tableSidebar(database, tables));
 }
 
-export function editPage(
-  database: string,
-  table: string,
-  columns: { name: string; type: string; nullable: boolean; key: string; defaultValue: unknown; extra: string }[],
-  row: Record<string, unknown>,
-  tables: { name: string }[],
-  error?: string
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function editPage({
+  database,
+  table,
+  columns,
+  row,
+  tables,
+  error,
+}: EditPageProps): string {
   const content = render(compiled.edit, { database, table, columns, row, error });
-  return layout(`Edit - ${table}`, content, sidebar);
+  return layout(`Edit - ${table}`, content, tableSidebar(database, tables));
 }
 
-export function sqlPage(
-  database: string | null,
-  tables: { name: string }[],
-  result?: {
-    fields: { name: string }[];
-    rows: Record<string, unknown>[];
-    affectedRows?: number;
-    message?: string;
-  },
-  sql?: string
-): string {
-  const sidebar = database ? render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  }) : "";
+export function sqlPage({
+  database,
+  tables,
+  result,
+  sql,
+}: SqlPageProps): string {
+  const sidebar = database ? tableSidebar(database, tables) : "";
   const content = render(compiled.sql, { database, result, sql });
   return layout("SQL Query", content, sidebar);
 }
@@ -170,68 +196,40 @@ export function errorPage(title: string, message: string, backUrl: string = "/")
 
 export function createTablePage(
   database: string,
-  tables: { name: string }[],
+  tables: SidebarTable[],
   error?: string
 ): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
   const content = render(compiled.createTable, { database, error });
-  return layout(`Create Table - ${database}`, content, sidebar);
+  return layout(`Create Table - ${database}`, content, tableSidebar(database, tables));
 }
 
-export function exportPage(
-  database: string,
-  table: string,
-  dump: string,
-  tables: { name: string }[],
-  preview: boolean = false
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function exportPage({
+  database,
+  table,
+  dump,
+  tables,
+  preview = false,
+}: ExportTablePageProps): string {
   const content = render(compiled.exportTable, { database, table, dump, preview });
-  return layout(`Export - ${table}`, content, sidebar);
+  return layout(`Export - ${table}`, content, tableSidebar(database, tables));
 }
 
-export function exportDatabasePage(
-  database: string,
-  dump: string,
-  tables: { name: string }[],
-  preview: boolean = false
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function exportDatabasePage({
+  database,
+  dump,
+  tables,
+  preview = false,
+}: ExportDatabasePageProps): string {
   const content = render(compiled.exportDatabase, { database, dump, preview });
-  return layout(`Export - ${database}`, content, sidebar);
+  return layout(`Export - ${database}`, content, tableSidebar(database, tables));
 }
 
-export function importPage(
-  database: string,
-  tables: { name: string }[],
-  result?: { message: string },
-  error?: string
-): string {
-  const sidebar = render(compiled.sidebar, {
-    title: "Tables",
-    items: tables.map((t) => ({
-      href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(t.name)}`,
-      name: t.name,
-    })),
-  });
+export function importPage({
+  database,
+  tables,
+  result,
+  error,
+}: ImportPageProps): string {
   const content = render(compiled.importSQL, { database, result, error });
-  return layout(`Import - ${database}`, content, sidebar);
+  return layout(`Import - ${database}`, content, tableSidebar(database, tables));
 }

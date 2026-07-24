@@ -50,7 +50,7 @@ export function registerRoutes(): void {
       return;
     }
     const databases = await db.listDatabases(ctx.sessionId!);
-    sendHtml(res, 200, views.databaseListPage(databases, conn.name));
+    sendHtml(res, 200, views.databaseListPage(databases));
   });
 
   post("/connect", async (ctx: RouteContext, res: ServerResponse) => {
@@ -150,7 +150,7 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.tableListPage(dbName, tables));
+    sendHtml(res, 200, views.tableListPage({ database: dbName, tables }));
   });
 
   // ---- Create Table (must be before generic /db/:db/table/:table) ----
@@ -217,7 +217,7 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.importPage(dbName, tables));
+    sendHtml(res, 200, views.importPage({ database: dbName, tables }));
   });
 
   post("/db/:db/import", async (ctx: RouteContext, res: ServerResponse) => {
@@ -230,11 +230,15 @@ export function registerRoutes(): void {
     try {
       const result = await db.importSQL(ctx.sessionId!, sql);
       const tables = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.importPage(dbName, tables, { message: result.message || 'Import successful' }));
+      sendHtml(res, 200, views.importPage({
+        database: dbName,
+        tables,
+        result: { message: result.message || "Import successful" },
+      }));
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const tables = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.importPage(dbName, tables, undefined, msg));
+      sendHtml(res, 200, views.importPage({ database: dbName, tables, error: msg }));
     }
   });
 
@@ -259,7 +263,18 @@ export function registerRoutes(): void {
     sendHtml(
       res,
       200,
-      views.tableDataPage(dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys, sort, order)
+      views.tableDataPage({
+        database: dbName,
+        table,
+        fields: data.fields,
+        rows: data.rows,
+        total: data.total,
+        page,
+        perPage: 50,
+        primaryKeys,
+        ...(sort ? { sort } : {}),
+        ...(order ? { order } : {}),
+      })
     );
   });
 
@@ -272,7 +287,12 @@ export function registerRoutes(): void {
       db.getTableStructure(ctx.sessionId!, table),
       db.listTables(ctx.sessionId!)
     ]);
-    sendHtml(res, 200, views.tableStructurePage(dbName, table, columns, tables));
+    sendHtml(res, 200, views.tableStructurePage({
+      database: dbName,
+      table,
+      columns,
+      tables,
+    }));
   });
 
   get("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
@@ -284,7 +304,7 @@ export function registerRoutes(): void {
       db.getTableStructure(ctx.sessionId!, table),
       db.listTables(ctx.sessionId!)
     ]);
-    sendHtml(res, 200, views.insertPage(dbName, table, columns, tables));
+    sendHtml(res, 200, views.insertPage({ database: dbName, table, columns, tables }));
   });
 
   post("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
@@ -311,7 +331,13 @@ export function registerRoutes(): void {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const tables = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.insertPage(dbName, table, columns, tables, msg));
+      sendHtml(res, 200, views.insertPage({
+        database: dbName,
+        table,
+        columns,
+        tables,
+        error: msg,
+      }));
     }
   });
 
@@ -344,7 +370,13 @@ export function registerRoutes(): void {
       return;
     }
 
-    sendHtml(res, 200, views.editPage(dbName, table, columns, result.rows[0]!, tables));
+    sendHtml(res, 200, views.editPage({
+      database: dbName,
+      table,
+      columns,
+      row: result.rows[0]!,
+      tables,
+    }));
   });
 
   post("/db/:db/table/:table/update", async (ctx: RouteContext, res: ServerResponse) => {
@@ -377,7 +409,14 @@ export function registerRoutes(): void {
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       const tables = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.editPage(dbName, table, columns, ctx.body as Record<string, unknown>, tables, msg));
+      sendHtml(res, 200, views.editPage({
+        database: dbName,
+        table,
+        columns,
+        row: ctx.body,
+        tables,
+        error: msg,
+      }));
     }
   });
 
@@ -399,10 +438,17 @@ export function registerRoutes(): void {
         db.getTableStructure(ctx.sessionId!, table)
       ]);
       const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
-      sendHtml(res, 200, views.tableDataPage(
-        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
-        undefined, undefined, undefined, errorMsg
-      ));
+      sendHtml(res, 200, views.tableDataPage({
+        database: dbName,
+        table,
+        fields: data.fields,
+        rows: data.rows,
+        total: data.total,
+        page,
+        perPage: 50,
+        primaryKeys,
+        error: errorMsg,
+      }));
     }
   });
 
@@ -417,7 +463,11 @@ export function registerRoutes(): void {
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const tables = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.tableListPage(dbName, tables, undefined, errorMsg));
+      sendHtml(res, 200, views.tableListPage({
+        database: dbName,
+        tables,
+        error: errorMsg,
+      }));
     }
   });
 
@@ -437,10 +487,17 @@ export function registerRoutes(): void {
         db.getTableStructure(ctx.sessionId!, table)
       ]);
       const primaryKeys = columns.filter(c => c.key === 'PRI').map(c => c.name);
-      sendHtml(res, 200, views.tableDataPage(
-        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
-        undefined, undefined, undefined, errorMsg
-      ));
+      sendHtml(res, 200, views.tableDataPage({
+        database: dbName,
+        table,
+        fields: data.fields,
+        rows: data.rows,
+        total: data.total,
+        page,
+        perPage: 50,
+        primaryKeys,
+        error: errorMsg,
+      }));
     }
   });
 
@@ -488,7 +545,11 @@ export function registerRoutes(): void {
     } catch (err: unknown) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       const tablesList = await db.listTables(ctx.sessionId!);
-      sendHtml(res, 200, views.tableListPage(dbName, tablesList, undefined, errorMsg));
+      sendHtml(res, 200, views.tableListPage({
+        database: dbName,
+        tables: tablesList,
+        error: errorMsg,
+      }));
       return;
     }
 
@@ -521,10 +582,17 @@ export function registerRoutes(): void {
       const [data] = await Promise.all([
         db.getTableData(ctx.sessionId!, table, page, 50)
       ]);
-      sendHtml(res, 200, views.tableDataPage(
-        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
-        undefined, undefined, undefined, "No primary keys found, cannot bulk delete"
-      ));
+      sendHtml(res, 200, views.tableDataPage({
+        database: dbName,
+        table,
+        fields: data.fields,
+        rows: data.rows,
+        total: data.total,
+        page,
+        perPage: 50,
+        primaryKeys,
+        error: "No primary keys found, cannot bulk delete",
+      }));
       return;
     }
 
@@ -546,10 +614,17 @@ export function registerRoutes(): void {
       const [data] = await Promise.all([
         db.getTableData(ctx.sessionId!, table, page, 50)
       ]);
-      sendHtml(res, 200, views.tableDataPage(
-        dbName, table, data.fields, data.rows, data.total, page, 50, primaryKeys,
-        undefined, undefined, undefined, errorMsg
-      ));
+      sendHtml(res, 200, views.tableDataPage({
+        database: dbName,
+        table,
+        fields: data.fields,
+        rows: data.rows,
+        total: data.total,
+        page,
+        perPage: 50,
+        primaryKeys,
+        error: errorMsg,
+      }));
       return;
     }
 
@@ -559,14 +634,14 @@ export function registerRoutes(): void {
   // ---- SQL Query ----
 
   get("/sql", async (_ctx: RouteContext, res: ServerResponse) => {
-    sendHtml(res, 200, views.sqlPage(null, []));
+    sendHtml(res, 200, views.sqlPage({ database: null, tables: [] }));
   });
 
   post("/sql", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(ctx, res)) return;
     const sql = (ctx.body["sql"] as string) ?? "";
     const result = await db.executeQuery(ctx.sessionId!, sql);
-    sendHtml(res, 200, views.sqlPage(null, [], result, sql));
+    sendHtml(res, 200, views.sqlPage({ database: null, tables: [], result, sql }));
   });
 
   get("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
@@ -574,7 +649,7 @@ export function registerRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.sqlPage(dbName, tables));
+    sendHtml(res, 200, views.sqlPage({ database: dbName, tables }));
   });
 
   post("/db/:db/sql", async (ctx: RouteContext, res: ServerResponse) => {
@@ -586,7 +661,7 @@ export function registerRoutes(): void {
       db.executeQuery(ctx.sessionId!, sql),
       db.listTables(ctx.sessionId!)
     ]);
-    sendHtml(res, 200, views.sqlPage(dbName, tables, result, sql));
+    sendHtml(res, 200, views.sqlPage({ database: dbName, tables, result, sql }));
   });
 
   // ---- Export Table ----
@@ -617,14 +692,25 @@ export function registerRoutes(): void {
 
       if (isOpen) {
         const tables = await db.listTables(ctx.sessionId!);
-        sendHtml(res, 200, views.exportPage(dbName, table, dump, tables, true));
+        sendHtml(res, 200, views.exportPage({
+          database: dbName,
+          table,
+          dump,
+          tables,
+          preview: true,
+        }));
         return;
       }
     }
 
     // Default: show preview/options page
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.exportPage(dbName, table, "", tables, false));
+    sendHtml(res, 200, views.exportPage({
+      database: dbName,
+      table,
+      dump: "",
+      tables,
+    }));
   });
 
   // ---- Export Database ----
@@ -654,13 +740,22 @@ export function registerRoutes(): void {
 
       if (isOpen) {
         const tables = await db.listTables(ctx.sessionId!);
-        sendHtml(res, 200, views.exportDatabasePage(dbName, dump, tables, true));
+        sendHtml(res, 200, views.exportDatabasePage({
+          database: dbName,
+          dump,
+          tables,
+          preview: true,
+        }));
         return;
       }
     }
 
     // Default: show preview/options page
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.exportDatabasePage(dbName, "", tables, false));
+    sendHtml(res, 200, views.exportDatabasePage({
+      database: dbName,
+      dump: "",
+      tables,
+    }));
   });
 }

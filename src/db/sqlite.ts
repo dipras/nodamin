@@ -6,7 +6,14 @@ import Database from "better-sqlite3";
 import path from "node:path";
 import { unlinkSync } from "node:fs";
 import type { DatabaseDriver } from "./driver.js";
-import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
+import type {
+    DbConnection,
+    QueryExecutionOptions,
+    QueryResult,
+    ColumnInfo,
+    TableInfo,
+} from "../types.js";
+import { assertSqlReadOnly, assertWritable } from "./sql.js";
 
 export function quoteSQLiteIdentifier(identifier: string): string {
     return `"${identifier.replace(/"/g, '""')}"`;
@@ -23,8 +30,11 @@ export class SQLiteDriver implements DatabaseDriver {
             this.cleanupTemporaryFile();
         }
         const filePath = conn.filePath ?? ":memory:";
-        this.db = new Database(filePath);
-        this.db.pragma("journal_mode = WAL");
+        const options = conn.readOnly && filePath !== ":memory:"
+            ? { readonly: true, fileMustExist: true }
+            : undefined;
+        this.db = new Database(filePath, options);
+        if (!conn.readOnly) this.db.pragma("journal_mode = WAL");
         this.currentConnection = conn;
         this.dbName = path.basename(filePath, path.extname(filePath));
     }
@@ -69,8 +79,11 @@ export class SQLiteDriver implements DatabaseDriver {
     async testConnection(conn: DbConnection): Promise<boolean> {
         try {
             const filePath = conn.filePath ?? ":memory:";
-            const testDb = new Database(filePath);
-            testDb.pragma("journal_mode = WAL");
+            const options = conn.readOnly && filePath !== ":memory:"
+                ? { readonly: true, fileMustExist: true }
+                : undefined;
+            const testDb = new Database(filePath, options);
+            if (!conn.readOnly) testDb.pragma("journal_mode = WAL");
             testDb.close();
             return true;
         } catch (err) {
@@ -185,9 +198,10 @@ export class SQLiteDriver implements DatabaseDriver {
             .get(...Object.values(where)) as Record<string, unknown> | undefined ?? null;
     }
 
-    async executeQuery(sql: string): Promise<QueryResult> {
+    async executeQuery(sql: string, _options?: QueryExecutionOptions): Promise<QueryResult> {
         const db = this.getDb();
         try {
+            if (this.currentConnection?.readOnly) assertSqlReadOnly(sql);
             const trimmed = sql.trim();
             const isSelect = /^\s*(SELECT|PRAGMA|EXPLAIN)/i.test(trimmed);
 
@@ -223,10 +237,17 @@ export class SQLiteDriver implements DatabaseDriver {
         }
     }
 
+    async cancelQuery(_queryId: string): Promise<boolean> {
+        // better-sqlite3 executes on the current thread, so there is no independently
+        // running query that another HTTP request can interrupt.
+        return false;
+    }
+
     async insertRow(
         table: string,
         data: Record<string, unknown>
     ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         const db = this.getDb();
         const keys = Object.keys(data);
         if (keys.length === 0) throw new Error("At least one value is required");
@@ -247,6 +268,7 @@ export class SQLiteDriver implements DatabaseDriver {
         data: Record<string, unknown>,
         where: Record<string, unknown>
     ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         const db = this.getDb();
         if (Object.keys(data).length === 0) throw new Error("At least one value is required");
         if (Object.keys(where).length === 0) throw new Error("A row selector is required");
@@ -271,6 +293,7 @@ export class SQLiteDriver implements DatabaseDriver {
         table: string,
         where: Record<string, unknown>
     ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         const db = this.getDb();
         if (Object.keys(where).length === 0) throw new Error("A row selector is required");
         const whereClauses = Object.keys(where)
@@ -288,15 +311,18 @@ export class SQLiteDriver implements DatabaseDriver {
     }
 
     async dropTable(table: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         return this.executeQuery(`DROP TABLE ${quoteSQLiteIdentifier(table)}`);
     }
 
     async truncateTable(table: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         // SQLite doesn't have TRUNCATE, use DELETE
         return this.executeQuery(`DELETE FROM ${quoteSQLiteIdentifier(table)}`);
     }
 
     async createDatabase(_name: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         return {
             fields: [],
             rows: [],
@@ -305,6 +331,7 @@ export class SQLiteDriver implements DatabaseDriver {
     }
 
     async dropDatabase(_name: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         return {
             fields: [],
             rows: [],
@@ -316,6 +343,7 @@ export class SQLiteDriver implements DatabaseDriver {
         table: string,
         columns: { name: string; type: string; nullable: boolean; primary: boolean; autoIncrement: boolean; defaultValue?: string }[]
     ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         const columnDefs = columns.map((col) => {
             let def = `${quoteSQLiteIdentifier(col.name)} ${col.type}`;
             if (col.primary && col.autoIncrement) {
@@ -386,27 +414,33 @@ export class SQLiteDriver implements DatabaseDriver {
     }
 
     async importSQL(sql: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
         const db = this.getDb();
-        const statements = sql
-            .split(";")
-            .map((s) => s.trim())
-            .filter((s) => s && !s.startsWith("--"));
-
-        let affectedRows = 0;
-        for (const stmt of statements) {
-            try {
-                const result = db.prepare(stmt).run();
-                affectedRows += result.changes;
-            } catch {
-                // Some statements like CREATE TABLE return 0 changes
+        const before = db.prepare("SELECT total_changes() AS count").get() as { count: number };
+        const managesOwnTransaction = hasExplicitTransaction(sql);
+        try {
+            if (managesOwnTransaction) {
+                db.exec(sql);
+            } else {
+                db.transaction(() => db.exec(sql))();
             }
+        } catch (err: unknown) {
+            if (db.inTransaction) {
+                try { db.exec("ROLLBACK"); } catch { }
+            }
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(managesOwnTransaction
+                ? `Import failed; the script controlled its own transaction: ${message}`
+                : `Import failed and was rolled back: ${message}`);
         }
+        const after = db.prepare("SELECT total_changes() AS count").get() as { count: number };
+        const affectedRows = after.count - before.count;
 
         return {
             fields: [],
             rows: [],
             affectedRows,
-            message: `Executed ${statements.length} statement(s), affected ${affectedRows} row(s)`,
+            message: `Import completed, affected ${affectedRows} row(s)`,
         };
     }
 
@@ -426,4 +460,8 @@ export class SQLiteDriver implements DatabaseDriver {
 
         return dump;
     }
+}
+
+function hasExplicitTransaction(sql: string): boolean {
+    return /^\s*BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?\s*;/im.test(sql);
 }

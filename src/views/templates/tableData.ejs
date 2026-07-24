@@ -8,7 +8,11 @@
 <div class="actions">
   <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/structure" class="btn">🔧 Structure</a>
-  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/insert" class="btn btn-primary">+ Insert Row</a>
+  <% if (!data.readOnly) { %>
+    <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/insert" class="btn btn-primary">+ Insert Row</a>
+  <% } else { %>
+    <span class="badge">🔒 Read-only</span>
+  <% } %>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export" class="btn">📦 Export</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
 </div>
@@ -16,17 +20,21 @@
   <div class="empty">No data in this table</div>
 <% } else { %>
   <form id="bulkForm" method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/bulk-delete">
+    <% if (!data.readOnly) { %>
     <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
       <span style="font-size: 13px; color: var(--text2);">With selected:</span>
       <button type="button" class="btn btn-sm btn-danger" onclick="bulkDelete()">❌ Delete</button>
       <span id="selectedCount" style="font-size: 13px; color: var(--text2); margin-left: auto;"></span>
     </div>
+    <% } %>
     <div class="card" style="padding:0;overflow:hidden;">
       <div class="table-wrap">
         <table>
           <thead>
             <tr>
-              <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this)" style="width: auto; height: 18px;" /></th>
+              <% if (!data.readOnly) { %>
+                <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this)" style="width: auto; height: 18px;" /></th>
+              <% } %>
               <th>#</th>
               <% data.fields.forEach(function(f) { 
                 const newOrder = data.sort === f && data.order === 'asc' ? 'desc' : 'asc';
@@ -35,7 +43,7 @@
               %>
                 <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
               <% }); %>
-              <th>Actions</th>
+              <% if (!data.readOnly) { %><th>Actions</th><% } %>
             </tr>
           </thead>
           <tbody>
@@ -50,17 +58,21 @@
                 : data.fields.map(f => String(row[f] ?? '')).join('|'); // fallback identifier
             %>
               <tr>
-                <td><input type="checkbox" name="rows[]" value="<%= rowId %>" onchange="updateCount()" class="row-check" style="width: auto; height: 18px;" /></td>
+                <% if (!data.readOnly) { %>
+                  <td><input type="checkbox" name="rows[]" value="<%= rowId %>" onchange="updateCount()" class="row-check" style="width: auto; height: 18px;" /></td>
+                <% } %>
                 <td><%= (data.page - 1) * data.perPage + i + 1 %></td>
                 <% data.fields.forEach(function(f) { %>
                   <td><% if (row[f] === null) { %><span class="null">NULL</span><% } else { %><%= String(row[f]) %><% } %></td>
                 <% }); %>
-                <td>
+                <% if (!data.readOnly) { %><td>
                   <div style="display:flex;gap:4px;">
                     <a href="<%= baseUrl %>/edit?<%= whereParams %>" class="btn btn-sm">Edit</a>
-                    <button type="button" class="btn btn-sm btn-danger" onclick="confirmAction('Delete this row?', '<%= baseUrl %>/delete?<%= whereParams %>')">Del</button>
+                    <button type="button" class="btn btn-sm btn-danger destructive-action"
+                      data-action="Delete row" data-confirmation="DELETE"
+                      data-url="<%= baseUrl %>/delete?<%= whereParams %>">Del</button>
                   </div>
-                </td>
+                </td><% } %>
               </tr>
             <% }); %>
           </tbody>
@@ -108,9 +120,17 @@ function bulkDelete() {
     return;
   }
   
-  if (confirm(`Delete ${checked.length} selected row(s)?`)) {
-    document.getElementById('bulkForm').submit();
+  if (prompt(`Delete ${checked.length} selected row(s)?\n\nType DELETE to continue:`) !== 'DELETE') return;
+  let input = document.getElementById('bulkDeleteConfirmation');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'confirmation';
+    input.id = 'bulkDeleteConfirmation';
+    document.getElementById('bulkForm').appendChild(input);
   }
+  input.value = 'DELETE';
+  document.getElementById('bulkForm').submit();
 }
 </script>
 <% } %>

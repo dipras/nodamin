@@ -2,7 +2,13 @@
 // Nodamin - Database Driver Interface
 // ============================================================
 
-import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
+import type {
+    DbConnection,
+    QueryExecutionOptions,
+    QueryResult,
+    ColumnInfo,
+    TableInfo,
+} from "../types.js";
 
 export interface DatabaseDriver {
     connect(conn: DbConnection): void;
@@ -22,7 +28,8 @@ export interface DatabaseDriver {
         order?: string
     ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }>;
     getRow(table: string, where: Record<string, unknown>): Promise<Record<string, unknown> | null>;
-    executeQuery(sql: string): Promise<QueryResult>;
+    executeQuery(sql: string, options?: QueryExecutionOptions): Promise<QueryResult>;
+    cancelQuery(queryId: string): Promise<boolean>;
     insertRow(table: string, data: Record<string, unknown>): Promise<QueryResult>;
     updateRow(
         table: string,

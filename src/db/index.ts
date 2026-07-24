@@ -5,7 +5,13 @@
 // Each session has its own isolated database connection.
 
 import type { DatabaseDriver } from "./driver.js";
-import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
+import type {
+    DbConnection,
+    QueryExecutionOptions,
+    QueryResult,
+    ColumnInfo,
+    TableInfo,
+} from "../types.js";
 import { MySQLDriver } from "./mysql.js";
 import { SQLiteDriver } from "./sqlite.js";
 
@@ -110,8 +116,20 @@ export async function getRow(
     return requireDriver(sessionId).getRow(table, where);
 }
 
-export async function executeQuery(sessionId: string, sql: string): Promise<QueryResult> {
-    return requireDriver(sessionId).executeQuery(sql);
+export function isReadOnly(sessionId: string | null): boolean {
+    return getConnection(sessionId)?.readOnly === true;
+}
+
+export async function executeQuery(
+    sessionId: string,
+    sql: string,
+    options?: QueryExecutionOptions
+): Promise<QueryResult> {
+    return requireDriver(sessionId).executeQuery(sql, options);
+}
+
+export async function cancelQuery(sessionId: string, queryId: string): Promise<boolean> {
+    return requireDriver(sessionId).cancelQuery(queryId);
 }
 
 export async function insertRow(sessionId: string, table: string, data: Record<string, unknown>): Promise<QueryResult> {

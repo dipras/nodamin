@@ -12,6 +12,13 @@ export function requireConnection(ctx: RouteContext, res: ServerResponse): boole
   return true;
 }
 
+export function requireConfirmation(ctx: RouteContext, expected: string): void {
+  const confirmation = String(ctx.body["confirmation"] ?? "").trim();
+  if (confirmation !== expected) {
+    throw new Error(`Confirmation failed. Type "${expected}" exactly to continue.`);
+  }
+}
+
 export function cleanupTemporaryFile(filePath: string | null): void {
   if (!filePath) return;
   for (const candidate of [filePath, `${filePath}-wal`, `${filePath}-shm`]) {

@@ -3,8 +3,20 @@
 // ============================================================
 
 import mysql from "mysql2/promise";
+import { randomUUID } from "node:crypto";
 import type { DatabaseDriver } from "./driver.js";
-import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
+import type {
+  DbConnection,
+  QueryExecutionOptions,
+  QueryResult,
+  ColumnInfo,
+  TableInfo,
+} from "../types.js";
+import {
+  assertSqlReadOnly,
+  assertWritable,
+  splitSqlStatements,
+} from "./sql.js";
 
 export function quoteMySQLIdentifier(identifier: string): string {
   return `\`${identifier.replace(/`/g, "``")}\``;
@@ -14,6 +26,12 @@ export class MySQLDriver implements DatabaseDriver {
   private pool: mysql.Pool | null = null;
   private currentConnection: DbConnection | null = null;
   private currentDatabase: string | null = null;
+  private readonly activeQueries = new Map<string, {
+    connection: mysql.PoolConnection;
+    threadId: number;
+    cancelled: boolean;
+    timedOut: boolean;
+  }>();
 
   connect(conn: DbConnection): void {
     if (this.pool) {
@@ -35,6 +53,8 @@ export class MySQLDriver implements DatabaseDriver {
   }
 
   disconnect(): void {
+    for (const active of this.activeQueries.values()) active.connection.destroy();
+    this.activeQueries.clear();
     if (this.pool) {
       this.pool.end().catch(() => { });
       this.pool = null;
@@ -181,10 +201,35 @@ export class MySQLDriver implements DatabaseDriver {
     return (rows as Record<string, unknown>[])[0] ?? null;
   }
 
-  async executeQuery(sql: string): Promise<QueryResult> {
+  async executeQuery(sql: string, options?: QueryExecutionOptions): Promise<QueryResult> {
     const p = await this.getPool();
+    const queryId = options?.queryId ?? randomUUID();
+    if (this.activeQueries.has(queryId)) {
+      return {
+        fields: [],
+        rows: [],
+        message: "Error: A query with this ID is already running",
+      };
+    }
+    const connection = await p.getConnection();
+    const timeoutMs = normalizeTimeout(options?.timeoutMs ?? this.currentConnection?.queryTimeoutMs);
+    const active = {
+      connection,
+      threadId: connection.threadId,
+      cancelled: false,
+      timedOut: false,
+    };
+    this.activeQueries.set(queryId, active);
+    const timeout = timeoutMs
+      ? setTimeout(() => {
+        active.timedOut = true;
+        void this.interruptActiveQuery(queryId);
+      }, timeoutMs)
+      : null;
+
     try {
-      const [result, fields] = await p.query(sql);
+      if (this.currentConnection?.readOnly) assertSqlReadOnly(sql);
+      const [result, fields] = await connection.query(sql);
 
       if (Array.isArray(result)) {
         const rows = result as Record<string, unknown>[];
@@ -209,12 +254,39 @@ export class MySQLDriver implements DatabaseDriver {
         };
       }
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
+      const msg = active.cancelled
+        ? "Query cancelled"
+        : active.timedOut
+          ? `Query timed out after ${timeoutMs} ms`
+          : err instanceof Error ? err.message : String(err);
       return {
         fields: [],
         rows: [],
         message: `Error: ${msg}`,
       };
+    } finally {
+      if (timeout) clearTimeout(timeout);
+      this.activeQueries.delete(queryId);
+      connection.release();
+    }
+  }
+
+  async cancelQuery(queryId: string): Promise<boolean> {
+    const active = this.activeQueries.get(queryId);
+    if (!active) return false;
+    active.cancelled = true;
+    await this.interruptActiveQuery(queryId);
+    return true;
+  }
+
+  private async interruptActiveQuery(queryId: string): Promise<void> {
+    const active = this.activeQueries.get(queryId);
+    if (!active) return;
+    try {
+      const p = await this.getPool();
+      await p.query(`KILL QUERY ${active.threadId}`);
+    } catch {
+      active.connection.destroy();
     }
   }
 
@@ -222,6 +294,7 @@ export class MySQLDriver implements DatabaseDriver {
     table: string,
     data: Record<string, unknown>
   ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     const p = await this.getPool();
     const keys = Object.keys(data);
     if (keys.length === 0) throw new Error("At least one value is required");
@@ -244,6 +317,7 @@ export class MySQLDriver implements DatabaseDriver {
     data: Record<string, unknown>,
     where: Record<string, unknown>
   ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     const p = await this.getPool();
     if (Object.keys(data).length === 0) throw new Error("At least one value is required");
     if (Object.keys(where).length === 0) throw new Error("A row selector is required");
@@ -269,6 +343,7 @@ export class MySQLDriver implements DatabaseDriver {
     table: string,
     where: Record<string, unknown>
   ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     const p = await this.getPool();
     if (Object.keys(where).length === 0) throw new Error("A row selector is required");
     const whereClauses = Object.keys(where)
@@ -287,18 +362,22 @@ export class MySQLDriver implements DatabaseDriver {
   }
 
   async dropTable(table: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     return this.executeQuery(`DROP TABLE ${quoteMySQLIdentifier(table)}`);
   }
 
   async truncateTable(table: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     return this.executeQuery(`TRUNCATE TABLE ${quoteMySQLIdentifier(table)}`);
   }
 
   async createDatabase(name: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     return this.executeQuery(`CREATE DATABASE ${quoteMySQLIdentifier(name)}`);
   }
 
   async dropDatabase(name: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     return this.executeQuery(`DROP DATABASE ${quoteMySQLIdentifier(name)}`);
   }
 
@@ -306,6 +385,7 @@ export class MySQLDriver implements DatabaseDriver {
     table: string,
     columns: { name: string; type: string; nullable: boolean; primary: boolean; autoIncrement: boolean; defaultValue?: string }[]
   ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     const columnDefs = columns.map((col) => {
       let def = `${quoteMySQLIdentifier(col.name)} ${col.type}`;
       if (!col.nullable) def += " NOT NULL";
@@ -365,17 +445,20 @@ export class MySQLDriver implements DatabaseDriver {
   }
 
   async importSQL(sql: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
     const p = await this.getPool();
-    const statements = sql
-      .split(";")
-      .map((s) => s.trim())
-      .filter((s) => s && !s.startsWith("--"));
+    const statements = splitSqlStatements(sql);
 
     let affectedRows = 0;
-    for (const stmt of statements) {
-      const [result] = await p.query(stmt);
-      if ((result as mysql.ResultSetHeader).affectedRows) {
-        affectedRows += (result as mysql.ResultSetHeader).affectedRows;
+    for (const [index, statement] of statements.entries()) {
+      try {
+        const [result] = await p.query(statement);
+        if ((result as mysql.ResultSetHeader).affectedRows) {
+          affectedRows += (result as mysql.ResultSetHeader).affectedRows;
+        }
+      } catch (err: unknown) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Import stopped at statement ${index + 1} of ${statements.length}: ${message}`);
       }
     }
 
@@ -406,4 +489,9 @@ export class MySQLDriver implements DatabaseDriver {
 
     return dump;
   }
+}
+
+function normalizeTimeout(value: number | undefined): number | undefined {
+  if (!value || !Number.isFinite(value)) return undefined;
+  return Math.min(300_000, Math.max(100, Math.round(value)));
 }

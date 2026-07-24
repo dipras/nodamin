@@ -3,7 +3,7 @@ import * as db from "../db/index.js";
 import { get, post, redirect, sendHtml } from "../router.js";
 import type { RouteContext } from "../types.js";
 import * as views from "../views/pages.js";
-import { requireConnection } from "./shared.js";
+import { requireConfirmation, requireConnection } from "./shared.js";
 
 export function registerRowRoutes(): void {
   get("/db/:db/table/:table/insert", async (ctx: RouteContext, res: ServerResponse) => {
@@ -128,6 +128,7 @@ export function registerRowRoutes(): void {
     db.setCurrentDatabase(ctx.sessionId!, dbName);
 
     try {
+      requireConfirmation(ctx, "DELETE");
       await db.deleteRow(ctx.sessionId!, table, { ...ctx.query });
       redirect(res, tablePath(dbName, table));
     } catch (err: unknown) {
@@ -158,6 +159,7 @@ export function registerRowRoutes(): void {
     }
 
     try {
+      requireConfirmation(ctx, "DELETE");
       for (const rowId of rowIds) {
         const values = rowId.split("|");
         const where: Record<string, unknown> = {};
@@ -197,6 +199,7 @@ async function renderTableError(
     page,
     perPage: 50,
     primaryKeys,
+    readOnly: db.isReadOnly(ctx.sessionId),
     error: err instanceof Error ? err.message : String(err),
   }));
 }

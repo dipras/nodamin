@@ -71,6 +71,23 @@
             </div>
           </div>
 
+          <div class="form-row">
+            <div class="form-group">
+              <label>Query timeout (ms)</label>
+              <input type="number" name="queryTimeoutMs" value="30000" min="100" max="300000"
+                step="100" style="width:100%">
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end;">
+              <label style="display:flex;gap:8px;align-items:center;margin-bottom:9px;">
+                <input type="checkbox" name="readOnly" value="1" style="width:auto">
+                Read-only mode
+              </label>
+            </div>
+          </div>
+          <small style="color:var(--text-muted,#888);display:block;margin:-4px 0 12px;">
+            Read-only mode blocks SQL and UI operations that can change the database.
+          </small>
+
           <button type="submit" class="btn btn-primary"
             style="width:100%;justify-content:center;margin-top:8px;">Connect</button>
         </form>

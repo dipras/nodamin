@@ -2,8 +2,15 @@
 <% if (data.message) { %>
   <div class="msg msg-success"><%= data.message %></div>
 <% } %>
+<% if (data.error) { %>
+  <div class="msg msg-error"><%= data.error %></div>
+<% } %>
 <div class="actions">
-  <button class="btn btn-primary" onclick="showModal('createDb')">+ Create Database</button>
+  <% if (!data.readOnly) { %>
+    <button class="btn btn-primary" onclick="showModal('createDb')">+ Create Database</button>
+  <% } else { %>
+    <span class="badge">🔒 Read-only</span>
+  <% } %>
   <form method="POST" action="/disconnect" style="display:inline">
     <button type="submit" class="btn btn-danger">Disconnect</button>
   </form>
@@ -15,11 +22,16 @@
       <div class="label"><a href="/db/<%= encodeURIComponent(db) %>"><%= db %></a></div>
       <div style="display:flex;gap:8px;margin-top:8px;">
         <a href="/db/<%= encodeURIComponent(db) %>" class="btn btn-sm">Open</a>
-        <button class="btn btn-sm btn-danger" onclick="confirmAction('Drop database <%= db %>?', '/db/<%= encodeURIComponent(db) %>/drop')">Drop</button>
+        <% if (!data.readOnly) { %>
+          <button type="button" class="btn btn-sm btn-danger destructive-action"
+            data-action="Drop database" data-confirmation="<%= db %>"
+            data-url="/db/<%= encodeURIComponent(db) %>/drop">Drop</button>
+        <% } %>
       </div>
     </div>
   <% }); %>
 </div>
+<% if (!data.readOnly) { %>
 <div class="modal-overlay" id="createDb">
   <div class="modal">
     <h2>Create Database</h2>
@@ -35,3 +47,4 @@
     </form>
   </div>
 </div>
+<% } %>

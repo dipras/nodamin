@@ -18,6 +18,8 @@ Nodamin is a web-based database administration tool inspired by [Adminer](https:
 - 🔍 **Database Explorer** - Browse databases, tables, and structures easily.
 - 📦 **Export/Import** - Export database/table to SQL dumps, or import existing SQL files.
 - ✅ **Bulk Actions** - Select multiple tables/rows for bulk operations.
+- 🔒 **SQL Safety Controls** - Optional read-only sessions, query timeout/cancellation, and typed
+  confirmations for destructive actions.
 
 ## 🚀 Quick Start
 
@@ -55,6 +57,21 @@ npm start
 📝 **Notes for SQLite**:
 - You can upload an existing `.db` file directly via the UI.
 - Selecting the **Create New** option will provision a temporary **In-Memory** database (data is lost upon server restart). This is perfect for quick testing and prototyping.
+- SQLite runs synchronously in-process, so live query timeout and cancellation are only available
+  for MySQL connections.
+
+### Connection Safety
+
+The connection form provides two optional safety controls:
+
+- **Read-only mode** blocks CRUD, DDL, import, and mutating raw SQL. Uploaded SQLite databases are
+  also opened with SQLite's native read-only flag.
+- **Query timeout** sets the default limit for raw MySQL queries. The SQL editor keeps running
+  queries attached to a query ID and exposes a Cancel button that interrupts the active MySQL query.
+
+Dropping databases/tables, truncating tables, and deleting rows require typed confirmation. SQL
+imports stop on the first MySQL error; SQLite imports use native script parsing and roll back the
+script on failure unless the script explicitly manages its own transaction.
 
 ## 🛠️ Configuration & CLI Variables
 
@@ -134,12 +151,12 @@ database engines.
 
 ### 1. Reliability and SQL Safety
 
-- [ ] Expand integration tests for CRUD, pagination, sorting, import, and export
-- [ ] Add shared driver conformance tests for MySQL and SQLite
-- [ ] Improve SQL import parsing for quoted delimiters, triggers, and procedures
-- [ ] Add query timeout and cancellation controls
-- [ ] Add an optional read-only mode for safer database inspection
-- [ ] Improve destructive-action confirmations and error recovery
+- [x] Expand integration tests for CRUD, pagination, sorting, import, and export
+- [x] Add shared driver conformance tests for MySQL and SQLite
+- [x] Improve SQL import parsing for quoted delimiters, triggers, and procedures
+- [x] Add MySQL query timeout and cancellation controls
+- [x] Add an optional read-only mode for safer database inspection
+- [x] Improve destructive-action confirmations and import/error recovery
 
 ### 2. Daily Query Workflow
 

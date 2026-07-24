@@ -48,6 +48,7 @@ export function registerTableBrowseRoutes(): void {
       page,
       perPage: 50,
       primaryKeys,
+      readOnly: db.isReadOnly(ctx.sessionId),
       ...(sort ? { sort } : {}),
       ...(order ? { order } : {}),
     }));

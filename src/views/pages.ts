@@ -53,6 +53,7 @@ interface TableListPageProps {
   tables: TableInfo[];
   message?: string;
   error?: string;
+  readOnly?: boolean;
 }
 
 interface TableDataPageProps {
@@ -68,6 +69,7 @@ interface TableDataPageProps {
   order?: string;
   message?: string;
   error?: string;
+  readOnly?: boolean;
 }
 
 interface TableStructurePageProps {
@@ -90,6 +92,9 @@ interface SqlPageProps {
   tables: SidebarTable[];
   result?: QueryResult;
   sql?: string;
+  readOnly?: boolean;
+  queryTimeoutMs?: number;
+  canCancel?: boolean;
 }
 
 interface ExportTablePageProps {
@@ -123,9 +128,11 @@ export function loginPage(error?: string): string {
 
 export function databaseListPage(
   databases: string[],
-  message?: string
+  message?: string,
+  error?: string,
+  readOnly = false
 ): string {
-  const content = render(compiled.databaseList, { databases, message });
+  const content = render(compiled.databaseList, { databases, message, error, readOnly });
   return layout("Databases", content, databaseSidebar(databases));
 }
 
@@ -134,8 +141,9 @@ export function tableListPage({
   tables,
   message,
   error,
+  readOnly = false,
 }: TableListPageProps): string {
-  const content = render(compiled.tableList, { database, tables, message, error });
+  const content = render(compiled.tableList, { database, tables, message, error, readOnly });
   return layout(database, content, tableSidebar(database, tables));
 }
 
@@ -183,9 +191,19 @@ export function sqlPage({
   tables,
   result,
   sql,
+  readOnly = false,
+  queryTimeoutMs = 30_000,
+  canCancel = false,
 }: SqlPageProps): string {
   const sidebar = database ? tableSidebar(database, tables) : "";
-  const content = render(compiled.sql, { database, result, sql });
+  const content = render(compiled.sql, {
+    database,
+    result,
+    sql,
+    readOnly,
+    queryTimeoutMs,
+    canCancel,
+  });
   return layout("SQL Query", content, sidebar);
 }
 

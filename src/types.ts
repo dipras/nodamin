@@ -14,6 +14,9 @@ export interface DbConnection {
   // SQLite fields
   filePath?: string;
   temporaryFile?: boolean;
+  // Safety settings
+  readOnly?: boolean;
+  queryTimeoutMs?: number;
 }
 
 export interface ServerConfig {
@@ -26,6 +29,11 @@ export interface QueryResult {
   rows: Record<string, unknown>[];
   affectedRows?: number;
   message?: string;
+}
+
+export interface QueryExecutionOptions {
+  queryId?: string;
+  timeoutMs?: number;
 }
 
 export interface ColumnInfo {

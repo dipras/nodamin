@@ -32,16 +32,31 @@
   }
 })();
 
-// Modal & confirm functions
-function confirmAction(msg, url) {
-  if (!confirm(msg)) return;
+// Modal & typed confirmation for destructive actions
+function submitDestructiveAction(url, confirmation) {
   const form = document.createElement('form');
   form.method = 'POST';
   form.action = url;
   form.hidden = true;
+  const input = document.createElement('input');
+  input.type = 'hidden';
+  input.name = 'confirmation';
+  input.value = confirmation;
+  form.appendChild(input);
   document.body.appendChild(form);
   form.submit();
 }
+document.addEventListener('click', (event) => {
+  if (!(event.target instanceof Element)) return;
+  const button = event.target.closest('.destructive-action');
+  if (!button) return;
+  const expected = button.dataset.confirmation || '';
+  const action = button.dataset.action || 'Continue';
+  const url = button.dataset.url;
+  if (!expected || !url) return;
+  const entered = prompt(`${action}?\n\nType "${expected}" exactly to continue:`);
+  if (entered === expected) submitDestructiveAction(url, expected);
+});
 function showModal(id) {
   document.getElementById(id)?.classList.add('active');
 }

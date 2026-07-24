@@ -1,14 +1,31 @@
 <h1>📝 SQL Query<% if (data.database) { %> — <%= data.database %><% } %></h1>
 <div class="actions">
   <a href="<%= data.database ? '/db/' + encodeURIComponent(data.database) : '/' %>" class="btn">← Back</a>
+  <% if (data.readOnly) { %><span class="badge">🔒 Read-only</span><% } %>
 </div>
 <div class="card sql-editor">
-  <form method="POST" action="<%= data.database ? '/db/' + encodeURIComponent(data.database) + '/sql' : '/sql' %>">
+  <form id="sqlQueryForm" method="POST" action="<%= data.database ? '/db/' + encodeURIComponent(data.database) + '/sql' : '/sql' %>">
     <div class="form-group">
       <label>SQL Statement</label>
       <textarea name="sql" style="width:100%;min-height:160px;" placeholder="SELECT * FROM ..."><%= data.sql || '' %></textarea>
     </div>
-    <button type="submit" class="btn btn-primary">▶ Execute</button>
+    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+      <div class="form-group" style="margin:0;">
+        <label>Timeout (ms)</label>
+        <input type="number" name="timeoutMs" value="<%= data.queryTimeoutMs %>" min="100"
+          max="300000" step="100" style="width:130px">
+      </div>
+      <button id="executeQueryButton" type="submit" class="btn btn-primary">▶ Execute</button>
+      <% if (data.canCancel) { %>
+        <button id="cancelQueryButton" type="button" class="btn btn-danger" hidden>■ Cancel</button>
+      <% } %>
+      <span id="queryStatus" style="color:var(--text2);font-size:13px;"></span>
+    </div>
+    <% if (!data.canCancel) { %>
+      <small style="display:block;margin-top:8px;color:var(--text2);">
+        SQLite executes in-process; live timeout and cancellation are available for MySQL connections.
+      </small>
+    <% } %>
   </form>
 </div>
 <% if (data.result) { %>
@@ -45,3 +62,48 @@
     <div class="info" style="margin-top:8px;font-size:12px;color:var(--text2);"><%= data.result.rows.length %> row(s) returned</div>
   <% } %>
 <% } %>
+
+<script>
+(function () {
+  const form = document.getElementById('sqlQueryForm');
+  const executeButton = document.getElementById('executeQueryButton');
+  const cancelButton = document.getElementById('cancelQueryButton');
+  const status = document.getElementById('queryStatus');
+  let queryId = null;
+
+  form.addEventListener('submit', async function (event) {
+    event.preventDefault();
+    queryId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+    const body = new URLSearchParams(new FormData(form));
+    body.set('queryId', queryId);
+    executeButton.disabled = true;
+    if (cancelButton) cancelButton.hidden = false;
+    status.textContent = 'Running query…';
+
+    try {
+      const response = await fetch(form.action, { method: 'POST', body });
+      const html = await response.text();
+      document.open();
+      document.write(html);
+      document.close();
+    } catch (error) {
+      status.textContent = `Request failed: ${error instanceof Error ? error.message : String(error)}`;
+      executeButton.disabled = false;
+      if (cancelButton) cancelButton.hidden = true;
+    }
+  });
+
+  cancelButton?.addEventListener('click', async function () {
+    if (!queryId) return;
+    cancelButton.disabled = true;
+    status.textContent = 'Cancelling query…';
+    const cancelUrl = '<%= data.database ? '/db/' + encodeURIComponent(data.database) + '/query/cancel' : '/query/cancel' %>';
+    const response = await fetch(cancelUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: new URLSearchParams({ queryId }),
+    });
+    status.textContent = response.ok ? 'Cancellation requested…' : 'Query already completed.';
+  });
+})();
+</script>

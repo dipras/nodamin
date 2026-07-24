@@ -5,7 +5,7 @@ import * as db from "../db/index.js";
 import { get, post, redirect, sendHtml } from "../router.js";
 import type { RouteContext } from "../types.js";
 import * as views from "../views/pages.js";
-import { cleanupTemporaryFile, requireConnection } from "./shared.js";
+import { cleanupTemporaryFile, requireConfirmation, requireConnection } from "./shared.js";
 
 interface NewColumn {
   name: string;
@@ -20,15 +20,37 @@ export function registerSchemaRoutes(): void {
   post("/db/create", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(ctx, res)) return;
     const name = ctx.body["name"] as string;
-    if (name) await db.createDatabase(ctx.sessionId!, name);
-    redirect(res, "/");
+    try {
+      if (name) await db.createDatabase(ctx.sessionId!, name);
+      redirect(res, "/");
+    } catch (err: unknown) {
+      const databases = await db.listDatabases(ctx.sessionId!);
+      sendHtml(res, 200, views.databaseListPage(
+        databases,
+        undefined,
+        err instanceof Error ? err.message : String(err),
+        db.isReadOnly(ctx.sessionId)
+      ));
+    }
   });
 
   post("/db/:db/drop", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(ctx, res)) return;
-    await db.dropDatabase(ctx.sessionId!, ctx.params["db"]!);
-    db.setCurrentDatabase(ctx.sessionId!, null);
-    redirect(res, "/");
+    const dbName = ctx.params["db"]!;
+    try {
+      requireConfirmation(ctx, dbName);
+      await db.dropDatabase(ctx.sessionId!, dbName);
+      db.setCurrentDatabase(ctx.sessionId!, null);
+      redirect(res, "/");
+    } catch (err: unknown) {
+      const databases = await db.listDatabases(ctx.sessionId!);
+      sendHtml(res, 200, views.databaseListPage(
+        databases,
+        undefined,
+        err instanceof Error ? err.message : String(err),
+        db.isReadOnly(ctx.sessionId)
+      ));
+    }
   });
 
   get("/db/:db", async (ctx: RouteContext, res: ServerResponse) => {
@@ -36,7 +58,11 @@ export function registerSchemaRoutes(): void {
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     const tables = await db.listTables(ctx.sessionId!);
-    sendHtml(res, 200, views.tableListPage({ database: dbName, tables }));
+    sendHtml(res, 200, views.tableListPage({
+      database: dbName,
+      tables,
+      readOnly: db.isReadOnly(ctx.sessionId),
+    }));
   });
 
   // These routes must be registered before /db/:db/table/:table.

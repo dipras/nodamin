@@ -3,7 +3,7 @@ import * as db from "../db/index.js";
 import { post, redirect, sendHtml } from "../router.js";
 import type { RouteContext } from "../types.js";
 import * as views from "../views/pages.js";
-import { requireConnection } from "./shared.js";
+import { requireConfirmation, requireConnection } from "./shared.js";
 
 export function registerTableActionRoutes(): void {
   post("/db/:db/table/:table/drop", async (ctx: RouteContext, res: ServerResponse) => {
@@ -12,6 +12,7 @@ export function registerTableActionRoutes(): void {
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     try {
+      requireConfirmation(ctx, table);
       await db.dropTable(ctx.sessionId!, table);
       redirect(res, databasePath(dbName));
     } catch (err: unknown) {
@@ -19,6 +20,7 @@ export function registerTableActionRoutes(): void {
       sendHtml(res, 200, views.tableListPage({
         database: dbName,
         tables,
+        readOnly: db.isReadOnly(ctx.sessionId),
         error: err instanceof Error ? err.message : String(err),
       }));
     }
@@ -30,6 +32,7 @@ export function registerTableActionRoutes(): void {
     const table = ctx.params["table"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
     try {
+      requireConfirmation(ctx, table);
       await db.truncateTable(ctx.sessionId!, table);
       redirect(res, tablePath(dbName, table));
     } catch (err: unknown) {
@@ -47,6 +50,7 @@ export function registerTableActionRoutes(): void {
         page: 1,
         perPage: 50,
         primaryKeys,
+        readOnly: db.isReadOnly(ctx.sessionId),
         error: err instanceof Error ? err.message : String(err),
       }));
     }
@@ -69,9 +73,17 @@ export function registerTableActionRoutes(): void {
     try {
       const action = ctx.body["action"] as string;
       if (action === "drop" || action === "truncate") {
-        for (const table of tables) {
-          if (action === "drop") await db.dropTable(ctx.sessionId!, table);
-          else await db.truncateTable(ctx.sessionId!, table);
+        requireConfirmation(ctx, action.toUpperCase());
+        for (const [index, table] of tables.entries()) {
+          try {
+            if (action === "drop") await db.dropTable(ctx.sessionId!, table);
+            else await db.truncateTable(ctx.sessionId!, table);
+          } catch (err: unknown) {
+            const message = err instanceof Error ? err.message : String(err);
+            throw new Error(
+              `${action} stopped after ${index} of ${tables.length} table(s); failed on "${table}": ${message}`
+            );
+          }
         }
       } else if (action === "export") {
         const dumps: string[] = [];
@@ -90,6 +102,7 @@ export function registerTableActionRoutes(): void {
       sendHtml(res, 200, views.tableListPage({
         database: dbName,
         tables: tableList,
+        readOnly: db.isReadOnly(ctx.sessionId),
         error: err instanceof Error ? err.message : String(err),
       }));
       return;

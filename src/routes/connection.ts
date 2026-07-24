@@ -21,14 +21,22 @@ export function registerConnectionRoutes(): void {
       return;
     }
     const databases = await db.listDatabases(ctx.sessionId!);
-    sendHtml(res, 200, views.databaseListPage(databases));
+    sendHtml(res, 200, views.databaseListPage(
+      databases,
+      undefined,
+      undefined,
+      conn.readOnly === true
+    ));
   });
 
   post("/connect", async (ctx: RouteContext, res: ServerResponse) => {
     let uploadedFilePath: string | null = null;
+    let createdSessionId: string | null = null;
     try {
       const dbType = ((ctx.body["type"] as string) ?? "mysql") as "mysql" | "sqlite";
       const sqliteMode = ctx.body["sqliteMode"] as string;
+      const readOnly = ctx.body["readOnly"] === "1";
+      const queryTimeoutMs = normalizeQueryTimeout(ctx.body["queryTimeoutMs"]);
       let conn: DbConnection;
 
       if (dbType === "sqlite") {
@@ -39,6 +47,8 @@ export function registerConnectionRoutes(): void {
             name: dbName,
             type: "sqlite",
             filePath: ":memory:",
+            readOnly,
+            queryTimeoutMs,
           };
         } else {
           const file = ctx.body["sqliteFile"] as File | undefined;
@@ -53,6 +63,8 @@ export function registerConnectionRoutes(): void {
             type: "sqlite",
             filePath: file.filepath,
             temporaryFile: true,
+            readOnly,
+            queryTimeoutMs,
           };
         }
       } else {
@@ -65,6 +77,8 @@ export function registerConnectionRoutes(): void {
           port: Number(port) || 3306,
           user: user ?? "root",
           password: password ?? "",
+          readOnly,
+          queryTimeoutMs,
         };
       }
 
@@ -74,11 +88,15 @@ export function registerConnectionRoutes(): void {
         return;
       }
 
-      const sessionId = createSession(res);
-      db.connect(sessionId, conn);
+      createdSessionId = createSession(res);
+      db.connect(createdSessionId, conn);
       uploadedFilePath = null;
       redirect(res, "/");
     } catch (err: unknown) {
+      if (createdSessionId) {
+        destroySession(createdSessionId);
+        clearSessionCookie(res);
+      }
       cleanupTemporaryFile(uploadedFilePath);
       console.error("[Connect Error]:", err);
       sendHtml(res, 200, views.loginPage("Internal error occurred during connection. Check server logs."));
@@ -92,4 +110,10 @@ export function registerConnectionRoutes(): void {
     }
     redirect(res, "/");
   });
+}
+
+function normalizeQueryTimeout(value: unknown): number {
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) return 30_000;
+  return Math.min(300_000, Math.max(100, Math.round(parsed)));
 }

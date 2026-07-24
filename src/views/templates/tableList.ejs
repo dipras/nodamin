@@ -7,8 +7,12 @@
 <% } %>
 <div class="actions">
   <a href="/" class="btn">← Databases</a>
-  <a href="/db/<%= encodeURIComponent(data.database) %>/table/create" class="btn btn-primary">+ Create Table</a>
-  <a href="/db/<%= encodeURIComponent(data.database) %>/import" class="btn">📥 Import SQL</a>
+  <% if (!data.readOnly) { %>
+    <a href="/db/<%= encodeURIComponent(data.database) %>/table/create" class="btn btn-primary">+ Create Table</a>
+    <a href="/db/<%= encodeURIComponent(data.database) %>/import" class="btn">📥 Import SQL</a>
+  <% } else { %>
+    <span class="badge">🔒 Read-only</span>
+  <% } %>
   <a href="/db/<%= encodeURIComponent(data.database) %>/export" class="btn">📦 Export Database</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
 </div>
@@ -19,8 +23,10 @@
     <div style="margin-bottom: 12px; display: flex; gap: 8px; align-items: center;">
       <span style="font-size: 13px; color: var(--text2);">With selected:</span>
       <button type="button" class="btn btn-sm" onclick="bulkAction('export')">📦 Export</button>
-      <button type="button" class="btn btn-sm" onclick="bulkAction('truncate')" style="color:var(--warning);">🗑️ Truncate</button>
-      <button type="button" class="btn btn-sm btn-danger" onclick="bulkAction('drop')">❌ Drop</button>
+      <% if (!data.readOnly) { %>
+        <button type="button" class="btn btn-sm" onclick="bulkAction('truncate')" style="color:var(--warning);">🗑️ Truncate</button>
+        <button type="button" class="btn btn-sm btn-danger" onclick="bulkAction('drop')">❌ Drop</button>
+      <% } %>
       <span id="selectedCount" style="font-size: 13px; color: var(--text2); margin-left: auto;"></span>
     </div>
     <div class="card" style="padding:0;overflow:hidden;">
@@ -48,8 +54,15 @@
               <td>
                 <div style="display:flex;gap:4px;">
                   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/structure" class="btn btn-sm">Structure</a>
-                  <button type="button" class="btn btn-sm btn-danger" onclick="confirmAction('Drop table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop')">Drop</button>
-                  <button type="button" class="btn btn-sm" onclick="confirmAction('Truncate table <%= t.name %>?', '/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate')" style="color:var(--warning);">Truncate</button>
+                  <% if (!data.readOnly) { %>
+                    <button type="button" class="btn btn-sm btn-danger destructive-action"
+                      data-action="Drop table" data-confirmation="<%= t.name %>"
+                      data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop">Drop</button>
+                    <button type="button" class="btn btn-sm destructive-action"
+                      data-action="Truncate table" data-confirmation="<%= t.name %>"
+                      data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate"
+                      style="color:var(--warning);">Truncate</button>
+                  <% } %>
                 </div>
               </td>
             </tr>
@@ -93,9 +106,18 @@ function bulkAction(action) {
     return;
   }
   
-  if (confirm(msg)) {
-    document.getElementById('bulkAction').value = action;
-    document.getElementById('bulkForm').submit();
+  const confirmation = action.toUpperCase();
+  if (prompt(`${msg}\n\nType ${confirmation} to continue:`) !== confirmation) return;
+  document.getElementById('bulkAction').value = action;
+  let input = document.getElementById('bulkConfirmation');
+  if (!input) {
+    input = document.createElement('input');
+    input.type = 'hidden';
+    input.name = 'confirmation';
+    input.id = 'bulkConfirmation';
+    document.getElementById('bulkForm').appendChild(input);
   }
+  input.value = confirmation;
+  document.getElementById('bulkForm').submit();
 }
 </script>

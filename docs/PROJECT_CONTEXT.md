@@ -55,6 +55,7 @@ src/session.ts                cookie session dan in-memory session lifetime
 src/types.ts                  tipe lintas-layer
 src/db/driver.ts              kontrak kapabilitas semua driver
 src/db/index.ts               facade + Map sessionId -> DatabaseDriver
+src/db/sql.ts                 parser statement SQL dan klasifikasi query read-only
 src/db/mysql.ts               implementasi MySQL berbasis connection pool
 src/db/sqlite.ts              implementasi SQLite berbasis satu file/in-memory DB
 src/views/pages.ts            view-model dan komposisi layout/template
@@ -97,6 +98,8 @@ dikirim ke client.
 - Flow connect: bentuk `DbConnection` → `testConnection()` memakai driver sementara → buat session
   dan cookie → `db.connect(sessionId, conn)`. Flow disconnect harus menutup driver, menghapus mapping,
   dan membersihkan cookie.
+- `DbConnection.readOnly` dan `queryTimeoutMs` adalah setting per koneksi. Read-only harus ditegakkan
+  di driver/facade, bukan hanya dengan menyembunyikan tombol UI.
 - Mengganti tipe driver pada session yang sama harus memutus instance lama sebelum membuat driver
   baru.
 - State session dan koneksi tidak persisten; restart proses menghapus semuanya. SQLite `:memory:`
@@ -106,6 +109,10 @@ dikirim ke client.
 
 - `DatabaseDriver` adalah batas kapabilitas lintas database. Tambah/ubah operasi di interface,
   facade `src/db/index.ts`, dan setiap implementasi driver dalam perubahan yang sama.
+- Raw query menerima `QueryExecutionOptions`; query aktif dapat dibatalkan lewat `cancelQuery()`.
+  MySQL mendukung interrupt live melalui koneksi terpisah dan `KILL QUERY`; SQLite berbasis
+  `better-sqlite3` tetap sinkron dan mengembalikan `false` karena tidak dapat diinterupsi oleh request
+  HTTP paralel pada event loop yang sama.
 - Routes dan views hanya menggunakan facade, bukan mengimpor `MySQLDriver`/`SQLiteDriver` langsung.
 - Nilai data memakai parameter query pada operasi insert/update/delete. Identifier tabel/kolom tidak
   dapat diparameterkan, sehingga harus di-quote sesuai dialect dan tidak boleh disisipkan tanpa
@@ -114,6 +121,8 @@ dikirim ke client.
   pertahankan kontraknya saat memetakan metadata native driver.
 - Raw SQL dan import SQL memang fitur produk. Perlakukan perubahan parser/eksekusinya sebagai
   high-risk karena input sengaja dieksekusi terhadap database yang sedang terhubung.
+- Read-only raw SQL diklasifikasikan oleh `src/db/sql.ts`, termasuk seluruh statement dalam script
+  dan executable comments MySQL. Semua method CRUD/DDL/import juga wajib menolak koneksi read-only.
 
 ### Perbedaan driver
 
@@ -125,6 +134,10 @@ dikirim ke client.
   display name, bukan file baru.
 - SQLite tidak memiliki `TRUNCATE`, create/drop database, atau metadata engine/collation setara
   MySQL; implementasi mempertahankan respons kompatibel atau fallback yang disengaja.
+- Import MySQL memakai statement splitter yang memahami quote, comment, dan directive `DELIMITER`,
+  lalu berhenti dengan nomor statement saat error. SQLite memakai parser script native di dalam
+  transaksi agar trigger dan rollback tetap benar; script yang membawa transaksi eksplisit
+  mengelola boundary transaksinya sendiri.
 - Perubahan DDL, import/export, pagination, sorting, primary key, default value, dan autoincrement
   harus diperiksa pada kedua dialect.
 
@@ -192,6 +205,10 @@ npm start
 - Gunakan `npm test` untuk unit/integration test router, session, quoting identifier, dan SQLite;
   gunakan `npm run typecheck` untuk pemeriksaan TypeScript dan generator; gunakan `npm run build`
   untuk verifikasi bundle distribusi.
+- Shared driver conformance suite selalu menguji SQLite. Set `NODAMIN_TEST_MYSQL_HOST`,
+  `NODAMIN_TEST_MYSQL_DATABASE`, serta opsional `NODAMIN_TEST_MYSQL_PORT`,
+  `NODAMIN_TEST_MYSQL_USER`, dan `NODAMIN_TEST_MYSQL_PASSWORD` untuk menjalankan kontrak dan
+  query-cancellation test yang sama terhadap MySQL sungguhan.
 - Repo belum mendefinisikan script lint atau formatter. Perilaku MySQL tetap memerlukan smoke test
   dengan server eksternal karena suite lokal hanya menguji helper dialect MySQL.
 - `npm run dev` menggabungkan TypeScript watch dan esbuild watch; hentikan seluruh proses watch saat
@@ -204,8 +221,8 @@ npm start
   baru harus mempertahankan boundary ini.
 - Session, mapping driver, dan SQLite in-memory state hilang saat restart; tidak ada persistence atau
   multi-process coordination.
-- Parser import SQL memisahkan statement pada `;`; script kompleks yang memuat delimiter di string,
-  trigger, atau prosedur dapat diproses tidak akurat.
+- Import MySQL tidak dapat menjanjikan rollback atomik untuk DDL karena statement DDL dapat melakukan
+  implicit commit di server.
 
 ## Checklist update dokumen
 

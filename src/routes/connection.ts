@@ -91,14 +91,18 @@ export function registerConnectionRoutes(): void {
         }
       } else {
         const { host, port, user, password } = ctx.body as Record<string, string>;
+        const isPostgreSQL = dbType === "postgresql";
+        const defaultPort = isPostgreSQL ? 5432 : 3306;
+        const defaultUser = isPostgreSQL ? "postgres" : "root";
         conn = parsedUrl ?? {
           id: randomUUID(),
-          name: `${user ?? "root"}@${host ?? "localhost"}:${port ?? "3306"}`,
+          name: `${user || defaultUser}@${host || "localhost"}:${Number(port) || defaultPort}`,
           type: dbType,
-          host: host ?? "localhost",
-          port: Number(port) || 3306,
-          user: user ?? "root",
+          host: host || "localhost",
+          port: Number(port) || defaultPort,
+          user: user || defaultUser,
           password: password ?? "",
+          ...(isPostgreSQL ? { ssl: ctx.body["ssl"] === "1" } : {}),
         };
         conn.readOnly = readOnly;
         conn.queryTimeoutMs = queryTimeoutMs;
@@ -130,8 +134,7 @@ export function registerConnectionRoutes(): void {
       console.error("[Connect Error]:", err);
       const message = err instanceof Error && (
         err.message === "Invalid database URL."
-        || err.message.startsWith("Only mysql:// and mariadb://")
-        || err.message.startsWith("PostgreSQL URLs")
+        || err.message.startsWith("Only mysql://, mariadb://, postgresql://")
         || err.message.startsWith("The database URL")
         || err.message.startsWith("Unsupported database type:")
       )
@@ -181,31 +184,44 @@ export function parseConnectionUrl(value: string): DbConnection {
   } catch {
     throw new Error("Invalid database URL.");
   }
-  if (url.protocol === "postgres:" || url.protocol === "postgresql:") {
-    throw new Error("PostgreSQL URLs require the PostgreSQL driver, which is not supported yet.");
-  }
-  if (url.protocol !== "mysql:" && url.protocol !== "mariadb:") {
-    throw new Error("Only mysql:// and mariadb:// database URLs are currently supported.");
+  if (!["mysql:", "mariadb:", "postgres:", "postgresql:"].includes(url.protocol)) {
+    throw new Error(
+      "Only mysql://, mariadb://, postgresql://, and postgres:// database URLs are supported."
+    );
   }
   if (!url.hostname) throw new Error("The database URL must include a host.");
-  const user = decodeURIComponent(url.username || "root");
-  const port = Number(url.port) || 3306;
+  const isPostgreSQL = url.protocol === "postgres:" || url.protocol === "postgresql:";
+  const user = decodeURIComponent(url.username || (isPostgreSQL ? "postgres" : "root"));
+  const port = Number(url.port) || (isPostgreSQL ? 5432 : 3306);
   const database = decodeURIComponent(url.pathname.replace(/^\/+/, ""));
+  const sslMode = url.searchParams.get("sslmode")?.toLowerCase();
+  const ssl = isPostgreSQL && (
+    url.searchParams.get("ssl") === "true"
+    || (sslMode !== undefined && sslMode !== "disable")
+  );
   return {
     id: randomUUID(),
     name: `${user}@${url.hostname}:${port}${database ? `/${database}` : ""}`,
-    type: url.protocol === "mariadb:" ? "mariadb" : "mysql",
+    type: isPostgreSQL
+      ? "postgresql"
+      : url.protocol === "mariadb:" ? "mariadb" : "mysql",
     host: url.hostname,
     port,
     user,
     password: decodeURIComponent(url.password),
     ...(database ? { database } : {}),
+    ...(isPostgreSQL ? { ssl } : {}),
   };
 }
 
 function normalizeDatabaseType(value: unknown): DatabaseType {
   const type = String(value ?? "mysql");
-  if (type === "mysql" || type === "mariadb" || type === "sqlite") return type;
+  if (
+    type === "mysql"
+    || type === "mariadb"
+    || type === "postgresql"
+    || type === "sqlite"
+  ) return type;
   throw new Error(`Unsupported database type: ${type}`);
 }
 

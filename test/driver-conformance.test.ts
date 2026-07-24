@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 import type { DatabaseDriver } from "../src/db/driver.js";
 import { MySQLDriver } from "../src/db/mysql.js";
+import { PostgreSQLDriver } from "../src/db/postgresql.js";
 import { SQLiteDriver } from "../src/db/sqlite.js";
 import type { DbConnection } from "../src/types.js";
 
@@ -129,6 +130,8 @@ const mysqlHost = process.env["NODAMIN_TEST_MYSQL_HOST"];
 const mysqlDatabase = process.env["NODAMIN_TEST_MYSQL_DATABASE"];
 const mariadbHost = process.env["NODAMIN_TEST_MARIADB_HOST"];
 const mariadbDatabase = process.env["NODAMIN_TEST_MARIADB_DATABASE"];
+const postgresqlHost = process.env["NODAMIN_TEST_POSTGRESQL_HOST"];
+const postgresqlDatabase = process.env["NODAMIN_TEST_POSTGRESQL_DATABASE"];
 
 test("MySQL satisfies the shared database driver contract", {
   skip: !mysqlHost || !mysqlDatabase
@@ -170,6 +173,27 @@ test("MariaDB satisfies the shared server database driver contract", {
   });
 });
 
+test("PostgreSQL satisfies the shared database driver contract", {
+  skip: !postgresqlHost || !postgresqlDatabase
+    ? "Set NODAMIN_TEST_POSTGRESQL_HOST and NODAMIN_TEST_POSTGRESQL_DATABASE to run"
+    : false,
+}, async () => {
+  await assertDriverConformance({
+    driver: new PostgreSQLDriver(),
+    database: postgresqlDatabase!,
+    connection: {
+      id: "postgresql-conformance",
+      name: "postgresql-conformance",
+      type: "postgresql",
+      host: postgresqlHost!,
+      port: Number(process.env["NODAMIN_TEST_POSTGRESQL_PORT"] ?? 5432),
+      user: process.env["NODAMIN_TEST_POSTGRESQL_USER"] ?? "postgres",
+      password: process.env["NODAMIN_TEST_POSTGRESQL_PASSWORD"] ?? "",
+      ssl: process.env["NODAMIN_TEST_POSTGRESQL_SSL"] === "1",
+    },
+  });
+});
+
 test("MySQL query timeout and cancellation interrupt active work", {
   skip: !mysqlHost || !mysqlDatabase
     ? "Set NODAMIN_TEST_MYSQL_HOST and NODAMIN_TEST_MYSQL_DATABASE to run"
@@ -200,6 +224,43 @@ test("MySQL query timeout and cancellation interrupt active work", {
     });
     await new Promise((resolve) => setTimeout(resolve, 100));
     assert.equal(await driver.cancelQuery("cancel-test"), true);
+    assert.match((await running).message ?? "", /cancelled/);
+  } finally {
+    driver.disconnect();
+  }
+});
+
+test("PostgreSQL query timeout and cancellation interrupt active work", {
+  skip: !postgresqlHost || !postgresqlDatabase
+    ? "Set NODAMIN_TEST_POSTGRESQL_HOST and NODAMIN_TEST_POSTGRESQL_DATABASE to run"
+    : false,
+}, async () => {
+  const driver = new PostgreSQLDriver();
+  driver.connect({
+    id: "postgresql-query-controls",
+    name: "postgresql-query-controls",
+    type: "postgresql",
+    host: postgresqlHost!,
+    port: Number(process.env["NODAMIN_TEST_POSTGRESQL_PORT"] ?? 5432),
+    user: process.env["NODAMIN_TEST_POSTGRESQL_USER"] ?? "postgres",
+    password: process.env["NODAMIN_TEST_POSTGRESQL_PASSWORD"] ?? "",
+    database: postgresqlDatabase!,
+    ssl: process.env["NODAMIN_TEST_POSTGRESQL_SSL"] === "1",
+  });
+
+  try {
+    const timedOut = await driver.executeQuery("SELECT pg_sleep(1)", {
+      queryId: "postgresql-timeout-test",
+      timeoutMs: 100,
+    });
+    assert.match(timedOut.message ?? "", /timed out/);
+
+    const running = driver.executeQuery("SELECT pg_sleep(10)", {
+      queryId: "postgresql-cancel-test",
+      timeoutMs: 30_000,
+    });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    assert.equal(await driver.cancelQuery("postgresql-cancel-test"), true);
     assert.match((await running).message ?? "", /cancelled/);
   } finally {
     driver.disconnect();

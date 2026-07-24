@@ -9,7 +9,7 @@ Nodamin is a web-based database administration tool inspired by [Adminer](https:
 ## ✨ Features
 
 - 🚀 **Zero Configuration** - Instantly run via `npx` with no setup required.
-- 🔌 **Multiple SQL Database Support** - MySQL, MariaDB, and SQLite available, with PostgreSQL planned.
+- 🔌 **Multiple SQL Database Support** - MySQL, MariaDB, PostgreSQL, and SQLite.
 - 🎨 **Simple & Clean UI** - Toggle between Light and Dark themes.
 - ⚙️ **Custom Host & Port** - Configure binding ports and hosts via CLI or environment variables.
 - 🔧 **Full CRUD Operations** - Insert, update, delete, truncate, and drop tables/rows.
@@ -33,7 +33,7 @@ npx @dipras/nodamin
 npx @dipras/nodamin --port 8080 --host 127.0.0.1
 ```
 
-Open your browser to the URL displayed in your terminal (default: `http://localhost:3088`) and connect to your MySQL, MariaDB, or SQLite database.
+Open your browser to the URL displayed in your terminal (default: `http://localhost:3088`) and connect to your MySQL, MariaDB, PostgreSQL, or SQLite database.
 
 <details>
 <summary><b>🛠️ Install from Source (Manual)</b></summary>
@@ -58,7 +58,13 @@ npm start
 - You can upload an existing `.db` file directly via the UI.
 - Selecting the **Create New** option will provision a temporary **In-Memory** database (data is lost upon server restart). This is perfect for quick testing and prototyping.
 - SQLite runs synchronously in-process, so live query timeout and cancellation are only available
-  for MySQL and MariaDB connections.
+  for MySQL, MariaDB, and PostgreSQL connections.
+
+📝 **Notes for PostgreSQL**:
+
+- Connect with the server fields or a `postgresql://` / `postgres://` URL. Add
+  `?sslmode=require` to a URL, or select **Use SSL/TLS**, when the server requires TLS.
+- Table browsing and schema operations currently target the `public` schema.
 
 ### Connection Safety
 
@@ -66,13 +72,14 @@ The connection form provides two optional safety controls:
 
 - **Read-only mode** blocks CRUD, DDL, import, and mutating raw SQL. Uploaded SQLite databases are
   also opened with SQLite's native read-only flag.
-- **Query timeout** sets the default limit for raw MySQL/MariaDB queries. The SQL editor keeps
+- **Query timeout** sets the default limit for raw server-database queries. The SQL editor keeps
   running queries attached to a query ID and exposes a Cancel button that interrupts the active
   server query.
 
 Dropping databases/tables, truncating tables, and deleting rows require typed confirmation. SQL
-imports stop on the first MySQL/MariaDB error; SQLite imports use native script parsing and roll back the
-script on failure unless the script explicitly manages its own transaction.
+imports stop on the first MySQL/MariaDB error; PostgreSQL imports run transactionally; SQLite imports
+use native script parsing and roll back the script on failure unless the script explicitly manages
+its own transaction.
 
 ## 🛠️ Configuration & CLI Variables
 
@@ -116,6 +123,7 @@ src/
 │   ├── driver.ts      # Shared database contract
 │   ├── index.ts       # Per-session driver facade
 │   ├── mysql.ts       # Shared MySQL/MariaDB protocol driver
+│   ├── postgresql.ts  # PostgreSQL driver (public schema)
 │   └── sqlite.ts      # SQLite driver
 └── views/
     ├── pages.ts       # View-model and rendering
@@ -124,7 +132,7 @@ src/
     └── scripts.js     # Embedded browser behavior
 ```
 
-## 📋 Current MySQL & MariaDB Features
+## 📋 Current Database Features
 
 - ✅ Connect / Disconnect
 - ✅ List databases
@@ -162,7 +170,7 @@ database engines.
 ### 2. Daily Query Workflow
 
 - [x] Save and switch between multiple connections for the current session
-- [x] Connect with `mysql://` database URLs (PostgreSQL URLs follow PostgreSQL driver support)
+- [x] Connect with `mysql://`, `mariadb://`, `postgresql://`, and `postgres://` database URLs
 - [x] Add query history, saved queries, and reusable snippets
 - [x] Add SQL autocomplete for schemas, tables, columns, and keywords
 - [x] Add keyboard shortcuts and a better query editor experience
@@ -183,7 +191,7 @@ database engines.
 
 - [x] **MySQL** - Primary supported server database
 - [x] **SQLite** - File-based and in-memory database support
-- [ ] **PostgreSQL** - Next full driver, including schemas and PostgreSQL metadata
+- [x] **PostgreSQL** - Full shared-driver workflow and PostgreSQL metadata for the `public` schema
 - [x] **MariaDB** - First-class connection type over the shared MySQL protocol driver
 - [ ] **Microsoft SQL Server** - Later, after the shared SQL capabilities are stable
 

@@ -2,18 +2,19 @@
 // Nodamin - Types
 // ============================================================
 
-export type DatabaseType = "mysql" | "mariadb" | "sqlite";
+export type DatabaseType = "mysql" | "mariadb" | "postgresql" | "sqlite";
 
 export interface DbConnection {
   id: string;
   name: string;
   type: DatabaseType;
-  // MySQL/MariaDB fields
+  // Server database fields
   host?: string;
   port?: number;
   user?: string;
   password?: string;
   database?: string;
+  ssl?: boolean;
   // SQLite fields
   filePath?: string;
   temporaryFile?: boolean;

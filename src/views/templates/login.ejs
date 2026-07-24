@@ -9,20 +9,21 @@
         <form method="POST" action="/connect" enctype="multipart/form-data">
           <div class="form-group">
             <label>Database URL (optional)</label>
-            <input type="url" name="connectionUrl" placeholder="mysql://user:password@localhost:3306/database"
+            <input type="url" name="connectionUrl" placeholder="postgresql://user:password@localhost:5432/database"
               style="width:100%">
-            <small style="color:var(--text-muted,#888);">Supports mysql:// and mariadb:// URLs and overrides the server fields below.</small>
+            <small style="color:var(--text-muted,#888);">Supports mysql://, mariadb://, postgresql://, and postgres:// URLs and overrides the server fields below.</small>
           </div>
           <div class="form-group">
             <label>Database Type</label>
             <select name="type" id="dbType" style="width:100%" onchange="toggleDbFields()">
               <option value="mysql">MySQL</option>
               <option value="mariadb">MariaDB</option>
+              <option value="postgresql">PostgreSQL</option>
               <option value="sqlite">SQLite</option>
             </select>
           </div>
 
-          <!-- MySQL/MariaDB fields -->
+          <!-- Server database fields -->
           <div id="mysqlFields">
             <div class="form-row">
               <div class="form-group">
@@ -31,16 +32,22 @@
               </div>
               <div class="form-group">
                 <label>Port</label>
-                <input type="number" name="port" value="3306" style="width:100%">
+                <input type="number" name="port" id="serverPort" value="3306" style="width:100%">
               </div>
             </div>
             <div class="form-group">
               <label>Username</label>
-              <input type="text" name="user" value="root" style="width:100%">
+              <input type="text" name="user" id="serverUser" value="root" style="width:100%">
             </div>
             <div class="form-group">
               <label>Password</label>
               <input type="password" name="password" style="width:100%">
+            </div>
+            <div class="form-group" id="postgresSslField" style="display:none;">
+              <label style="display:flex;gap:8px;align-items:center;">
+                <input type="checkbox" name="ssl" value="1" style="width:auto">
+                Use SSL/TLS
+              </label>
             </div>
           </div>
 
@@ -109,6 +116,9 @@
     var type = document.getElementById('dbType').value;
     var mysqlFields = document.getElementById('mysqlFields');
     var sqliteFields = document.getElementById('sqliteFields');
+    var sslField = document.getElementById('postgresSslField');
+    var portInput = document.getElementById('serverPort');
+    var userInput = document.getElementById('serverUser');
 
     // Get inputs to disable/enable
     var mysqlInputs = mysqlFields.querySelectorAll('input');
@@ -125,6 +135,14 @@
       sqliteFields.style.display = 'none';
       mysqlInputs.forEach(i => i.disabled = false);
       sqliteInputs.forEach(i => i.disabled = true);
+      sslField.style.display = type === 'postgresql' ? 'block' : 'none';
+      if (type === 'postgresql') {
+        if (portInput.value === '3306') portInput.value = '5432';
+        if (userInput.value === 'root') userInput.value = 'postgres';
+      } else {
+        if (portInput.value === '5432') portInput.value = '3306';
+        if (userInput.value === 'postgres') userInput.value = 'root';
+      }
     }
   }
 
@@ -167,5 +185,5 @@
   }
 
   // Initialize
-  (function () { toggleSqliteMode(); })();
+  (function () { toggleDbFields(); })();
 </script>

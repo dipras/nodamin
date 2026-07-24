@@ -5,7 +5,7 @@ Dokumen ini adalah router konteks lintas-sesi untuk repo **Nodamin**. Source cod
 perbarui dokumen secara atomik. Terakhir diperbarui: 2026-07-25. Jangan simpan secret atau kredensial
 database di sini. Guardrails universal: semua koleksi koneksi database dan pilihan koneksi aktif
 harus tetap terisolasi per `sessionId`; perubahan kapabilitas database harus menjaga kontrak
-`DatabaseDriver` dan perilaku MySQL/MariaDB/SQLite tetap selaras; jangan edit
+`DatabaseDriver` dan perilaku MySQL/MariaDB/PostgreSQL/SQLite tetap selaras; jangan edit
 `src/views/compiled.ts` atau `src/views/assets.ts` secara
 manual karena keduanya generated; pertahankan urutan route spesifik sebelum route parametrik yang
 lebih generik; jangan melakukan operasi git destruktif atau menimpa perubahan lokal pengguna.
@@ -16,7 +16,7 @@ lebih generik; jangan melakukan operasi git destruktif atau menimpa perubahan lo
 |---|---|---|
 | Tambah atau ubah route/operasi CRUD | [Request flow dan routing](#request-flow-dan-routing) | `src/routes.ts`, `src/routes/`, `src/router.ts` |
 | Tambah driver atau kapabilitas database | [Kontrak driver database](#kontrak-driver-database) | `src/db/driver.ts`, `src/db/index.ts` |
-| Ubah perilaku khusus MySQL/SQLite | [Perbedaan driver](#perbedaan-driver) | `src/db/mysql.ts`, `src/db/sqlite.ts` |
+| Ubah perilaku khusus dialect database | [Perbedaan driver](#perbedaan-driver) | `src/db/mysql.ts`, `src/db/postgresql.ts`, `src/db/sqlite.ts` |
 | Ubah halaman, template, CSS, atau browser JS | [Rendering dan generated files](#rendering-dan-generated-files) | `src/views/templates/`, `src/views/pages.ts` |
 | Ubah login koneksi, cookie, atau isolasi koneksi | [Session dan koneksi](#session-dan-koneksi) | `src/session.ts`, `src/db/index.ts` |
 | Ubah CLI, host, port, build, atau packaging | [Runtime dan build](#runtime-dan-build) | `src/index.ts`, `esbuild.config.js`, `package.json` |
@@ -30,7 +30,7 @@ tersebut.
 ## Ringkasan project
 
 Nodamin adalah admin database web single-process yang dijalankan melalui Node.js/`npx`, dengan UI
-server-rendered untuk MySQL, MariaDB, dan SQLite. Repo ini memiliki HTTP server, routing, session memory,
+server-rendered untuk MySQL, MariaDB, PostgreSQL, dan SQLite. Repo ini memiliki HTTP server, routing, session memory,
 driver database, template EJS, serta pipeline bundling menjadi satu entry JavaScript. Repo ini bukan
 database server dan belum menyediakan autentikasi aplikasi terpisah dari form kredensial koneksi.
 
@@ -39,7 +39,7 @@ database server dan belum menyediakan autentikasi aplikasi terpisah dari form kr
 - TypeScript 5.9, strict mode, ESM/NodeNext; source menargetkan ES2022.
 - Node.js 20+; bundle produksi esbuild 0.27 menargetkan Node 20.
 - HTTP server bawaan Node, router internal, dan `formidable` untuk multipart form.
-- `mysql2/promise` untuk MySQL/MariaDB; `better-sqlite3` untuk SQLite.
+- `mysql2/promise` untuk MySQL/MariaDB; `pg` untuk PostgreSQL; `better-sqlite3` untuk SQLite.
 - EJS 4 diprekompilasi; CSS, browser JavaScript, dan favicon di-embed ke bundle.
 - npm + `package-lock.json`; paket dipublikasikan sebagai `@dipras/nodamin`.
 
@@ -58,6 +58,7 @@ src/db/driver.ts              kontrak kapabilitas semua driver
 src/db/index.ts               facade + koleksi driver dan koneksi aktif per sessionId
 src/db/sql.ts                 parser statement SQL dan klasifikasi query read-only
 src/db/mysql.ts               implementasi bersama MySQL/MariaDB berbasis connection pool
+src/db/postgresql.ts          implementasi PostgreSQL untuk schema public berbasis pool
 src/db/sqlite.ts              implementasi SQLite berbasis satu file/in-memory DB
 src/views/pages.ts            view-model dan komposisi layout/template
 src/views/templates/*.ejs     source of truth markup
@@ -97,7 +98,7 @@ dikirim ke client.
 - `src/db/index.ts` menyimpan koleksi instance driver dan satu `activeId` per `sessionId`. Jangan
   memperkenalkan singleton koneksi global, mencampur koleksi antar-session, atau mengakses driver
   tanpa `sessionId`.
-- Flow connect: bentuk `DbConnection` (form atau URL MySQL/MariaDB) → `testConnection()` memakai driver
+- Flow connect: bentuk `DbConnection` (form atau URL MySQL/MariaDB/PostgreSQL) → `testConnection()` memakai driver
   sementara → buat atau gunakan session dan cookie → `db.connect(sessionId, conn)`. Menambah koneksi
   mempertahankan driver lain dalam session; switch hanya mengganti `activeId`. Flow logout/expiry
   harus menutup seluruh driver, menghapus mapping, dan membersihkan cookie.
@@ -134,6 +135,10 @@ dikirim ke client.
 - MySQL dan MariaDB memakai `MySQLDriver`, pool, dan current database melalui protokol/dialect MySQL;
   identifier menggunakan backtick. `DbConnection.type` tetap membedakan keduanya untuk UI,
   observability, dan conformance test.
+- PostgreSQL memakai `PostgreSQLDriver` dan `pg.Pool`; pemilihan database mengganti pool karena
+  database merupakan bagian dari koneksi. Metadata tabel/kolom/index/foreign key saat ini dibatasi
+  ke schema `public`, identifier memakai double quote, dan query aktif dibatalkan melalui
+  `pg_cancel_backend`.
 - SQLite bersifat satu file = satu database; `setCurrentDatabase()` no-op, identifier menggunakan
   double quote, dan operasi sinkron `better-sqlite3` dibungkus API async agar cocok dengan interface.
 - SQLite mode `create` saat ini membuat `:memory:` database; nama yang dimasukkan hanya menjadi
@@ -144,7 +149,8 @@ dikirim ke client.
   menghapus foreign key; proses ini wajib mempertahankan data, index eksplisit/unique, dan trigger,
   serta mengaktifkan kembali pemeriksaan foreign key setelah selesai.
 - Import MySQL/MariaDB memakai statement splitter yang memahami quote, comment, dan directive `DELIMITER`,
-  lalu berhenti dengan nomor statement saat error. SQLite memakai parser script native di dalam
+  lalu berhenti dengan nomor statement saat error. PostgreSQL mengirim script utuh agar dollar-quoted
+  function body tetap valid dan membungkusnya dalam transaksi. SQLite memakai parser script native di dalam
   transaksi agar trigger dan rollback tetap benar; script yang membawa transaksi eksplisit
   mengelola boundary transaksinya sendiri.
 - Perubahan DDL, import/export, pagination, sorting, primary key, default value, dan autoincrement
@@ -218,6 +224,10 @@ npm start
   `NODAMIN_TEST_MYSQL_DATABASE`, serta opsional `NODAMIN_TEST_MYSQL_PORT`,
   `NODAMIN_TEST_MYSQL_USER`, dan `NODAMIN_TEST_MYSQL_PASSWORD` untuk menjalankan kontrak dan
   query-cancellation test yang sama terhadap MySQL sungguhan.
+- Untuk PostgreSQL sungguhan, set `NODAMIN_TEST_POSTGRESQL_HOST` dan
+  `NODAMIN_TEST_POSTGRESQL_DATABASE`; opsi tambahannya adalah `NODAMIN_TEST_POSTGRESQL_PORT`,
+  `NODAMIN_TEST_POSTGRESQL_USER`, `NODAMIN_TEST_POSTGRESQL_PASSWORD`, dan
+  `NODAMIN_TEST_POSTGRESQL_SSL=1`.
 - Gunakan pasangan env `NODAMIN_TEST_MARIADB_HOST` dan `NODAMIN_TEST_MARIADB_DATABASE` beserta
   varian `PORT`, `USER`, dan `PASSWORD` untuk menjalankan kontrak yang sama terhadap MariaDB.
 - Repo belum mendefinisikan script lint atau formatter. Perilaku MySQL tetap memerlukan smoke test

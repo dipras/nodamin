@@ -107,7 +107,9 @@ function queryPageProps(
     databases,
     readOnly: connection?.readOnly === true,
     queryTimeoutMs: connection?.queryTimeoutMs ?? 30_000,
-    canCancel: connection?.type === "mysql" || connection?.type === "mariadb",
+    canCancel: connection?.type === "mysql"
+      || connection?.type === "mariadb"
+      || connection?.type === "postgresql",
     explainPrefix: connection?.type === "sqlite" ? "EXPLAIN QUERY PLAN " : "EXPLAIN ",
     autocomplete,
   };

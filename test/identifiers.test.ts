@@ -5,10 +5,12 @@ import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 import { quoteMySQLIdentifier } from "../src/db/mysql.js";
+import { quotePostgreSQLIdentifier } from "../src/db/postgresql.js";
 import { quoteSQLiteIdentifier, SQLiteDriver } from "../src/db/sqlite.js";
 
 test("identifier helpers escape dialect quote characters", () => {
   assert.equal(quoteMySQLIdentifier("odd`name"), "`odd``name`");
+  assert.equal(quotePostgreSQLIdentifier('odd"name'), '"odd""name"');
   assert.equal(quoteSQLiteIdentifier('odd"name'), '"odd""name"');
 });
 

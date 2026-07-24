@@ -4,7 +4,7 @@
 
 import * as compiled from "./compiled.js";
 import { CSS, JS } from "./assets.js";
-import type { ColumnInfo, QueryResult, TableInfo } from "../types.js";
+import type { ColumnInfo, DbConnection, QueryResult, TableInfo } from "../types.js";
 
 // Wrapper to call EJS compiled functions (they expect 4 params: data, escapeFn, include, rethrow)
 type CompiledTemplate = (
@@ -44,6 +44,7 @@ function navigationSidebar(active = ""): string {
     items: [
       { href: "/", name: "Databases", icon: "◉", active: active === "databases" },
       { href: "/sql", name: "SQL Query", icon: "⌘", active: active === "sql" },
+      { href: "/connections", name: "Connections", icon: "↔", active: active === "connections" },
     ],
   });
 }
@@ -58,24 +59,30 @@ function connectSidebar(): string {
 function databaseSidebar(databases: string[], activeDatabase = ""): string {
   return render(compiled.sidebar, {
     title: "Databases",
-    items: databases.map((database) => ({
+    items: [
+      { href: "/connections", name: "Connections", icon: "↔", active: false },
+      ...databases.map((database) => ({
       href: `/db/${encodeURIComponent(database)}`,
       name: database,
       icon: "◉",
       active: database === activeDatabase,
-    })),
+      })),
+    ],
   });
 }
 
 function tableSidebar(database: string, tables: SidebarTable[], activeTable = ""): string {
   return render(compiled.sidebar, {
     title: "Tables",
-    items: tables.map(({ name }) => ({
+    items: [
+      { href: "/connections", name: "Connections", icon: "↔", active: false },
+      ...tables.map(({ name }) => ({
       href: `/db/${encodeURIComponent(database)}/table/${encodeURIComponent(name)}`,
       name,
       icon: "▦",
       active: name === activeTable,
-    })),
+      })),
+    ],
   });
 }
 
@@ -119,6 +126,7 @@ interface TableDataPageProps {
   tables: SidebarTable[];
   sort?: string;
   order?: string;
+  filters?: Record<string, string>;
   message?: string;
   error?: string;
   readOnly?: boolean;
@@ -150,6 +158,7 @@ interface SqlPageProps {
   canCancel?: boolean;
   explainPrefix?: string;
   executionTimeMs?: number;
+  autocomplete?: { schemas: string[]; tables: string[]; columns: string[] };
 }
 
 interface ExportTablePageProps {
@@ -176,9 +185,14 @@ interface ImportPageProps {
 
 // ---- Page Renderers ----
 
-export function loginPage(error?: string): string {
-  const content = render(compiled.login, { error });
+export function loginPage(error?: string, adding = false): string {
+  const content = render(compiled.login, { error, adding });
   return layout("Connect", content, connectSidebar());
+}
+
+export function connectionListPage(connections: DbConnection[], activeId: string): string {
+  const content = render(compiled.connectionList, { connections, activeId });
+  return layout("Connections", content, navigationSidebar("connections"));
 }
 
 export function databaseListPage(
@@ -272,6 +286,7 @@ export function sqlPage({
   canCancel = false,
   explainPrefix = "EXPLAIN ",
   executionTimeMs,
+  autocomplete = { schemas: [], tables: [], columns: [] },
 }: SqlPageProps): string {
   const sidebar = database
     ? tableSidebar(database, tables)
@@ -285,6 +300,7 @@ export function sqlPage({
     canCancel,
     explainPrefix,
     executionTimeMs,
+    autocomplete,
   });
   return layout(
     "SQL Query",

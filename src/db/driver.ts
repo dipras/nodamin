@@ -25,8 +25,10 @@ export interface DatabaseDriver {
         page?: number,
         perPage?: number,
         sort?: string,
-        order?: string
+        order?: string,
+        filters?: Record<string, string>
     ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }>;
+    getTableRows(table: string): Promise<Record<string, unknown>[]>;
     getRow(table: string, where: Record<string, unknown>): Promise<Record<string, unknown> | null>;
     executeQuery(sql: string, options?: QueryExecutionOptions): Promise<QueryResult>;
     cancelQuery(queryId: string): Promise<boolean>;

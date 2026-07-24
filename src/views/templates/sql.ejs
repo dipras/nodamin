@@ -16,6 +16,7 @@
         <pre id="sql-highlight" aria-hidden="true"><code></code></pre>
         <textarea id="sql-input" name="sql" spellcheck="false" autocomplete="off"
           aria-label="SQL statement" placeholder="SELECT * FROM ..."><%= data.sql || '' %></textarea>
+        <div id="sqlSuggestions" class="sql-suggestions" hidden></div>
       </div>
     </div>
     <div class="sql-toolbar">
@@ -26,6 +27,7 @@
       </div>
       <button id="executeQueryButton" type="submit" class="btn btn-primary">▶ Execute</button>
       <button id="explainQueryButton" type="button" class="btn">Explain</button>
+      <button id="saveQueryButton" type="button" class="btn">Save query</button>
       <% if (data.canCancel) { %>
         <button id="cancelQueryButton" type="button" class="btn btn-danger" hidden>■ Cancel</button>
       <% } %>
@@ -45,6 +47,11 @@
     </div>
     <div id="queryHistoryList"></div>
     <p id="queryHistoryEmpty">Executed queries will appear here on this device.</p>
+    <div class="query-history-heading saved-query-heading">
+      <h2>Saved & snippets</h2>
+    </div>
+    <div id="savedQueryList"></div>
+    <p id="savedQueryEmpty">Save a query with Ctrl/⌘ + S.</p>
   </aside>
 </div>
 <% if (data.result) { %>
@@ -81,6 +88,10 @@
     <div class="query-result-meta">
       <span>Returned <strong><%= data.result.rows.length.toLocaleString() %></strong> row<%= data.result.rows.length === 1 ? '' : 's' %></span>
       <span>Execution <strong><%= data.executionTimeMs %> ms</strong></span>
+      <span class="query-result-actions">
+        <button type="button" class="text-button" data-export-result="csv">Download CSV</button>
+        <button type="button" class="text-button" data-export-result="json">Download JSON</button>
+      </span>
     </div>
   <% } else if (data.executionTimeMs !== undefined) { %>
     <div class="query-result-meta">
@@ -88,6 +99,11 @@
     </div>
   <% } %>
 <% } %>
+
+<script id="sqlAutocompleteData" type="application/json"><%- JSON.stringify(data.autocomplete).replace(/</g, '\\u003c') %></script>
+<script id="sqlResultData" type="application/json"><%- JSON.stringify(data.result ? data.result.rows : [], function(_key, value) {
+  return typeof value === 'bigint' ? String(value) : value;
+}).replace(/</g, '\\u003c') %></script>
 
 <script>
 (function () {
@@ -102,7 +118,21 @@
   const historyList = document.getElementById('queryHistoryList');
   const historyEmpty = document.getElementById('queryHistoryEmpty');
   const clearHistory = document.getElementById('clearQueryHistory');
+  const saveQueryButton = document.getElementById('saveQueryButton');
+  const savedQueryList = document.getElementById('savedQueryList');
+  const savedQueryEmpty = document.getElementById('savedQueryEmpty');
+  const suggestions = document.getElementById('sqlSuggestions');
+  const autocomplete = JSON.parse(document.getElementById('sqlAutocompleteData').textContent);
   const historyKey = `nodamin-query-history:${form.dataset.historyScope}`;
+  const savedKey = `nodamin-saved-queries:${form.dataset.historyScope}`;
+  const keywords = ['SELECT', 'FROM', 'WHERE', 'JOIN', 'LEFT JOIN', 'INNER JOIN', 'GROUP BY',
+    'ORDER BY', 'HAVING', 'LIMIT', 'INSERT INTO', 'VALUES', 'UPDATE', 'SET', 'DELETE FROM',
+    'CREATE TABLE', 'ALTER TABLE', 'DROP TABLE', 'WITH', 'AS', 'DISTINCT', 'EXPLAIN'];
+  const reusableSnippets = [
+    { name: 'Select rows', sql: 'SELECT * FROM table_name LIMIT 100;' },
+    { name: 'Count rows', sql: 'SELECT COUNT(*) AS total FROM table_name;' },
+    { name: 'Find duplicates', sql: 'SELECT column_name, COUNT(*) AS total\\nFROM table_name\\nGROUP BY column_name\\nHAVING COUNT(*) > 1;' },
+  ];
   let queryId = null;
 
   function escapeHtml(value) {
@@ -161,7 +191,98 @@
     });
   }
 
-  input.addEventListener('input', () => highlightSql(input.value));
+  function getSavedQueries() {
+    try {
+      const saved = JSON.parse(localStorage.getItem(savedKey) || '[]');
+      return Array.isArray(saved) ? saved : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function useQuery(sql) {
+    input.value = sql;
+    highlightSql(sql);
+    input.focus();
+  }
+
+  function renderSavedQueries() {
+    const saved = getSavedQueries();
+    savedQueryList.replaceChildren();
+    savedQueryEmpty.hidden = saved.length > 0;
+    [...saved, ...reusableSnippets].forEach((item, index) => {
+      const row = document.createElement('div');
+      row.className = 'saved-query-item';
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'query-history-item';
+      button.textContent = item.name;
+      button.title = item.sql;
+      button.addEventListener('click', () => useQuery(item.sql));
+      row.appendChild(button);
+      if (index < saved.length) {
+        const remove = document.createElement('button');
+        remove.type = 'button';
+        remove.className = 'text-button';
+        remove.textContent = '×';
+        remove.title = 'Remove saved query';
+        remove.addEventListener('click', () => {
+          const next = getSavedQueries().filter(candidate => candidate.name !== item.name);
+          localStorage.setItem(savedKey, JSON.stringify(next));
+          renderSavedQueries();
+        });
+        row.appendChild(remove);
+      }
+      savedQueryList.appendChild(row);
+    });
+  }
+
+  function saveCurrentQuery() {
+    const sql = input.value.trim();
+    if (!sql) return input.focus();
+    const name = prompt('Name this query:', sql.split(/\s+/).slice(0, 5).join(' '));
+    if (!name?.trim()) return;
+    const saved = getSavedQueries().filter(item => item.name !== name.trim());
+    saved.unshift({ name: name.trim(), sql });
+    localStorage.setItem(savedKey, JSON.stringify(saved.slice(0, 30)));
+    renderSavedQueries();
+  }
+
+  function currentToken() {
+    return input.value.slice(0, input.selectionStart).match(/[a-zA-Z0-9_.]*$/)?.[0] || '';
+  }
+
+  function showSuggestions(force = false) {
+    const token = currentToken();
+    if (!force && token.length < 2) {
+      suggestions.hidden = true;
+      return;
+    }
+    const choices = [...keywords, ...autocomplete.schemas, ...autocomplete.tables, ...autocomplete.columns]
+      .filter((choice, index, all) => all.indexOf(choice) === index)
+      .filter(choice => force || choice.toLocaleLowerCase().includes(token.toLocaleLowerCase()))
+      .slice(0, 12);
+    suggestions.replaceChildren();
+    choices.forEach(choice => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = choice;
+      button.addEventListener('click', () => {
+        const start = input.selectionStart - token.length;
+        input.setRangeText(choice, start, input.selectionStart, 'end');
+        suggestions.hidden = true;
+        highlightSql(input.value);
+        input.focus();
+      });
+      suggestions.appendChild(button);
+    });
+    suggestions.hidden = choices.length === 0;
+  }
+
+  input.addEventListener('input', () => {
+    highlightSql(input.value);
+    showSuggestions();
+  });
   input.addEventListener('scroll', () => {
     highlightLayer.scrollTop = input.scrollTop;
     highlightLayer.scrollLeft = input.scrollLeft;
@@ -170,6 +291,18 @@
     if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
       event.preventDefault();
       form.requestSubmit();
+    } else if (event.key.toLocaleLowerCase() === 's' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      saveCurrentQuery();
+    } else if (event.key === ' ' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      showSuggestions(true);
+    } else if (event.key === 'Tab') {
+      event.preventDefault();
+      input.setRangeText('  ', input.selectionStart, input.selectionEnd, 'end');
+      highlightSql(input.value);
+    } else if (event.key === 'Escape') {
+      suggestions.hidden = true;
     }
   });
 
@@ -189,6 +322,7 @@
     localStorage.removeItem(historyKey);
     renderHistory();
   });
+  saveQueryButton.addEventListener('click', saveCurrentQuery);
 
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
@@ -228,5 +362,27 @@
 
   highlightSql(input.value);
   renderHistory();
+  renderSavedQueries();
+
+  document.querySelectorAll('[data-export-result]').forEach(button => {
+    button.addEventListener('click', () => {
+      const rows = JSON.parse(document.getElementById('sqlResultData').textContent);
+      const format = button.dataset.exportResult;
+      const fields = rows.length ? Object.keys(rows[0]) : [];
+      const csvCell = value => {
+        const normalized = value && typeof value === 'object' ? JSON.stringify(value) : String(value ?? '');
+        return `"${normalized.replace(/"/g, '""')}"`;
+      };
+      const content = format === 'json'
+        ? JSON.stringify(rows, null, 2)
+        : [fields.map(csvCell).join(','), ...rows.map(row => fields.map(field => csvCell(row[field])).join(','))].join('\\r\\n');
+      const blob = new Blob([content], { type: format === 'json' ? 'application/json' : 'text/csv' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `query-result.${format}`;
+      link.click();
+      URL.revokeObjectURL(link.href);
+    });
+  });
 })();
 </script>

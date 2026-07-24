@@ -15,8 +15,14 @@ import type {
 import { MySQLDriver } from "./mysql.js";
 import { SQLiteDriver } from "./sqlite.js";
 
-// Map of sessionId -> DatabaseDriver for per-session isolation
-const sessionDrivers = new Map<string, DatabaseDriver>();
+interface SessionDrivers {
+    activeId: string;
+    drivers: Map<string, DatabaseDriver>;
+}
+
+// Every browser session owns an isolated collection of drivers. Only the active
+// driver is exposed through the facade used by routes.
+const sessionDrivers = new Map<string, SessionDrivers>();
 
 function getDriverForType(type: string): DatabaseDriver {
     switch (type) {
@@ -31,49 +37,73 @@ function getDriverForType(type: string): DatabaseDriver {
 
 function requireDriver(sessionId: string | null): DatabaseDriver {
     if (!sessionId) throw new Error("No session ID provided");
-    const driver = sessionDrivers.get(sessionId);
+    const collection = sessionDrivers.get(sessionId);
+    const driver = collection?.drivers.get(collection.activeId);
     if (!driver) throw new Error("Not connected to database");
     return driver;
 }
 
 export function connect(sessionId: string, conn: DbConnection): void {
-    // Get or create driver for this session
-    let driver = sessionDrivers.get(sessionId);
-    
-    // If switching driver type, disconnect old one
-    if (driver) {
-        const currentConn = driver.getConnection();
-        if (currentConn && currentConn.type !== conn.type) {
-            driver.disconnect();
-            driver = getDriverForType(conn.type);
-            sessionDrivers.set(sessionId, driver);
-        }
-    } else {
-        driver = getDriverForType(conn.type);
-        sessionDrivers.set(sessionId, driver);
+    let collection = sessionDrivers.get(sessionId);
+    if (!collection) {
+        collection = { activeId: conn.id, drivers: new Map() };
+        sessionDrivers.set(sessionId, collection);
     }
-    
+    collection.drivers.get(conn.id)?.disconnect();
+    const driver = getDriverForType(conn.type);
+    collection.drivers.set(conn.id, driver);
+    collection.activeId = conn.id;
     driver.connect(conn);
 }
 
 export function disconnect(sessionId: string): void {
-    const driver = sessionDrivers.get(sessionId);
-    if (driver) {
-        driver.disconnect();
+    const collection = sessionDrivers.get(sessionId);
+    if (collection) {
+        for (const driver of collection.drivers.values()) driver.disconnect();
         sessionDrivers.delete(sessionId);
     }
 }
 
 export function getConnection(sessionId: string | null): DbConnection | null {
     if (!sessionId) return null;
-    const driver = sessionDrivers.get(sessionId);
-    return driver?.getConnection() ?? null;
+    const collection = sessionDrivers.get(sessionId);
+    return collection?.drivers.get(collection.activeId)?.getConnection() ?? null;
 }
 
 export function getCurrentDatabase(sessionId: string | null): string | null {
     if (!sessionId) return null;
-    const driver = sessionDrivers.get(sessionId);
-    return driver?.getCurrentDatabase() ?? null;
+    const collection = sessionDrivers.get(sessionId);
+    return collection?.drivers.get(collection.activeId)?.getCurrentDatabase() ?? null;
+}
+
+export function listConnections(sessionId: string | null): DbConnection[] {
+    if (!sessionId) return [];
+    const collection = sessionDrivers.get(sessionId);
+    if (!collection) return [];
+    return [...collection.drivers.values()]
+        .map((driver) => driver.getConnection())
+        .filter((connection): connection is DbConnection => connection !== null);
+}
+
+export function switchConnection(sessionId: string, connectionId: string): boolean {
+    const collection = sessionDrivers.get(sessionId);
+    if (!collection?.drivers.has(connectionId)) return false;
+    collection.activeId = connectionId;
+    return true;
+}
+
+export function removeConnection(sessionId: string, connectionId: string): boolean {
+    const collection = sessionDrivers.get(sessionId);
+    const driver = collection?.drivers.get(connectionId);
+    if (!collection || !driver) return false;
+    driver.disconnect();
+    collection.drivers.delete(connectionId);
+    if (collection.drivers.size === 0) {
+        sessionDrivers.delete(sessionId);
+    } else if (collection.activeId === connectionId) {
+        collection.activeId = collection.drivers.keys().next().value as string;
+    }
+    return true;
 }
 
 export function setCurrentDatabase(sessionId: string, db: string | null): void {
@@ -103,9 +133,17 @@ export async function getTableData(
     page?: number,
     perPage?: number,
     sort?: string,
-    order?: string
+    order?: string,
+    filters?: Record<string, string>
 ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }> {
-    return requireDriver(sessionId).getTableData(table, page, perPage, sort, order);
+    return requireDriver(sessionId).getTableData(table, page, perPage, sort, order, filters);
+}
+
+export async function getTableRows(
+    sessionId: string,
+    table: string
+): Promise<Record<string, unknown>[]> {
+    return requireDriver(sessionId).getTableRows(table);
 }
 
 export async function getRow(

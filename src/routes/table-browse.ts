@@ -33,11 +33,15 @@ export function registerTableBrowseRoutes(): void {
     const page = Number(ctx.query["page"]) || 1;
     const sort = ctx.query["sort"];
     const order = ctx.query["order"];
-    const [data, columns, tables] = await Promise.all([
-      db.getTableData(ctx.sessionId!, table, page, 50, sort, order),
+    const [columns, tables] = await Promise.all([
       db.getTableStructure(ctx.sessionId!, table),
       db.listTables(ctx.sessionId!)
     ]);
+    const filters = Object.fromEntries(columns.flatMap((column) => {
+      const value = ctx.query[`filter.${column.name}`]?.trim();
+      return value ? [[column.name, value]] : [];
+    }));
+    const data = await db.getTableData(ctx.sessionId!, table, page, 50, sort, order, filters);
     const primaryKeys = columns.filter((column) => column.key === "PRI").map((column) => column.name);
 
     sendHtml(res, 200, views.tableDataPage({
@@ -53,6 +57,7 @@ export function registerTableBrowseRoutes(): void {
       readOnly: db.isReadOnly(ctx.sessionId),
       ...(sort ? { sort } : {}),
       ...(order ? { order } : {}),
+      filters,
     }));
   });
 }

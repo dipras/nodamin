@@ -165,25 +165,42 @@ export class SQLiteDriver implements DatabaseDriver {
         page: number = 1,
         perPage: number = 50,
         sort?: string,
-        order?: string
+        order?: string,
+        filters: Record<string, string> = {}
     ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }> {
         const db = this.getDb();
+        const columns = await this.getTableStructure(table);
+        const columnNames = new Set(columns.map((column) => column.name));
+        const activeFilters = Object.entries(filters)
+            .filter(([column, value]) => columnNames.has(column) && value.length > 0);
+        const where = activeFilters.length
+            ? ` WHERE ${activeFilters.map(([column]) => `CAST(${quoteSQLiteIdentifier(column)} AS TEXT) LIKE ?`).join(" AND ")}`
+            : "";
+        const values = activeFilters.map(([, value]) => `%${value}%`);
 
-        const countResult = db.prepare(`SELECT COUNT(*) as total FROM ${quoteSQLiteIdentifier(table)}`).get() as { total: number };
+        const countResult = db.prepare(
+            `SELECT COUNT(*) as total FROM ${quoteSQLiteIdentifier(table)}${where}`
+        ).get(...values) as { total: number };
         const total = countResult.total;
 
         const offset = (page - 1) * perPage;
-        let query = `SELECT * FROM ${quoteSQLiteIdentifier(table)}`;
+        let query = `SELECT * FROM ${quoteSQLiteIdentifier(table)}${where}`;
         if (sort) {
             const dir = order === "desc" ? "DESC" : "ASC";
             query += ` ORDER BY ${quoteSQLiteIdentifier(sort)} ${dir}`;
         }
         query += ` LIMIT ${perPage} OFFSET ${offset}`;
 
-        const rows = db.prepare(query).all() as Record<string, unknown>[];
-        const fields = rows.length > 0 ? Object.keys(rows[0]!) : [];
+        const rows = db.prepare(query).all(...values) as Record<string, unknown>[];
+        const fields = columns.map((column) => column.name);
 
         return { rows, total, fields };
+    }
+
+    async getTableRows(table: string): Promise<Record<string, unknown>[]> {
+        return this.getDb()
+            .prepare(`SELECT * FROM ${quoteSQLiteIdentifier(table)}`)
+            .all() as Record<string, unknown>[];
     }
 
     async getRow(

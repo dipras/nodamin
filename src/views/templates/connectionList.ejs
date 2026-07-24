@@ -1,0 +1,33 @@
+<div class="page-header">
+  <div>
+    <h1>↔ Connections</h1>
+    <p class="page-description">Switch between open connections in this browser session.</p>
+  </div>
+  <a href="/connections/new" class="btn btn-primary">+ Add connection</a>
+</div>
+
+<div class="card connection-list">
+  <% data.connections.forEach(function(connection) { %>
+    <div class="connection-list-item">
+      <div>
+        <strong><%= connection.name %></strong>
+        <div class="connection-meta">
+          <%= connection.type.toUpperCase() %>
+          <% if (connection.readOnly) { %> · Read-only<% } %>
+          <% if (connection.id === data.activeId) { %> · <span class="badge">Active</span><% } %>
+        </div>
+      </div>
+      <div class="actions">
+        <% if (connection.id !== data.activeId) { %>
+          <form method="POST" action="/connections/<%= encodeURIComponent(connection.id) %>/switch">
+            <button class="btn btn-primary" type="submit">Switch</button>
+          </form>
+        <% } %>
+        <button class="btn btn-danger destructive-action" type="button"
+          data-action="Remove connection <%= connection.name %>"
+          data-confirmation="<%= connection.name %>"
+          data-url="/connections/<%= encodeURIComponent(connection.id) %>/remove">Remove</button>
+      </div>
+    </div>
+  <% }); %>
+</div>

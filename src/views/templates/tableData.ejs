@@ -14,10 +14,18 @@
     <span class="badge">🔒 Read-only</span>
   <% } %>
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/export" class="btn">📦 Export</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/data/csv" class="btn">CSV</a>
+  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/data/json" class="btn">JSON</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn">📝 SQL Query</a>
 </div>
+<% if (Object.keys(data.filters || {}).length > 0) { %>
+  <div class="active-filters">
+    <span>Filtering <strong><%= Object.keys(data.filters).length %></strong> column(s)</span>
+    <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="text-button">Clear filters</a>
+  </div>
+<% } %>
 <% if (data.rows.length === 0) { %>
-  <div class="empty">No data in this table</div>
+  <div class="empty"><%= Object.keys(data.filters || {}).length > 0 ? 'No rows match these filters' : 'No data in this table' %></div>
 <% } else { %>
   <form id="bulkForm" method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/bulk-delete">
     <% if (!data.readOnly) { %>
@@ -38,7 +46,8 @@
               <th>#</th>
               <% data.fields.forEach(function(f) { 
                 const newOrder = data.sort === f && data.order === 'asc' ? 'desc' : 'asc';
-                const sortUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table) + '?page=' + data.page + '&sort=' + encodeURIComponent(f) + '&order=' + newOrder;
+                const filterParams = Object.entries(data.filters || {}).map(entry => '&filter.' + encodeURIComponent(entry[0]) + '=' + encodeURIComponent(entry[1])).join('');
+                const sortUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table) + '?page=' + data.page + '&sort=' + encodeURIComponent(f) + '&order=' + newOrder + filterParams;
                 const sortIcon = data.sort === f ? (data.order === 'asc' ? ' ↑' : ' ↓') : '';
               %>
                 <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
@@ -46,6 +55,25 @@
               <% if (!data.readOnly) { %>
                 <th class="browse-actions-heading"><span>Actions</span></th>
               <% } %>
+            </tr>
+            <tr class="column-filter-row">
+              <% if (!data.readOnly) { %><th></th><% } %>
+              <th></th>
+              <% data.fields.forEach(function(f) { %>
+                <th>
+                  <form method="GET">
+                    <% Object.entries(data.filters || {}).forEach(function(entry) {
+                      if (entry[0] !== f) { %>
+                        <input type="hidden" name="filter.<%= entry[0] %>" value="<%= entry[1] %>">
+                    <% } }); %>
+                    <% if (data.sort) { %><input type="hidden" name="sort" value="<%= data.sort %>"><% } %>
+                    <% if (data.order) { %><input type="hidden" name="order" value="<%= data.order %>"><% } %>
+                    <input type="search" name="filter.<%= f %>" value="<%= (data.filters || {})[f] || '' %>"
+                      placeholder="Filter…" aria-label="Filter <%= f %>">
+                  </form>
+                </th>
+              <% }); %>
+              <% if (!data.readOnly) { %><th></th><% } %>
             </tr>
           </thead>
           <tbody>
@@ -88,7 +116,8 @@
       <% 
         const baseUrl = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table);
         const totalPages = Math.ceil(data.total / data.perPage);
-        const sortParams = data.sort ? '&sort=' + data.sort + '&order=' + data.order : '';
+        const sortParams = (data.sort ? '&sort=' + encodeURIComponent(data.sort) + '&order=' + encodeURIComponent(data.order) : '')
+          + Object.entries(data.filters || {}).map(entry => '&filter.' + encodeURIComponent(entry[0]) + '=' + encodeURIComponent(entry[1])).join('');
       %>
       <% if (data.page > 1) { %>
         <a href="<%= baseUrl %>?page=<%= data.page - 1 %><%= sortParams %>" class="btn btn-sm">← Prev</a>

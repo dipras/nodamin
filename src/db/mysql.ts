@@ -45,8 +45,10 @@ export class MySQLDriver implements DatabaseDriver {
       waitForConnections: true,
       connectionLimit: 5,
     };
-    if (this.currentDatabase) {
-      poolOpts.database = this.currentDatabase;
+    const database = this.currentDatabase ?? conn.database;
+    if (database) {
+      poolOpts.database = database;
+      this.currentDatabase = database;
     }
     this.pool = mysql.createPool(poolOpts);
     this.currentConnection = conn;
@@ -91,6 +93,7 @@ export class MySQLDriver implements DatabaseDriver {
         port: conn.port ?? 3306,
         user: conn.user ?? "root",
         password: conn.password ?? "",
+        ...(conn.database ? { database: conn.database } : {}),
         connectionLimit: 1,
       });
       await testPool.query("SELECT 1");
@@ -162,28 +165,44 @@ export class MySQLDriver implements DatabaseDriver {
     page: number = 1,
     perPage: number = 50,
     sort?: string,
-    order?: string
+    order?: string,
+    filters: Record<string, string> = {}
   ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }> {
     const p = await this.getPool();
+    const columns = await this.getTableStructure(table);
+    const columnNames = new Set(columns.map((column) => column.name));
+    const activeFilters = Object.entries(filters)
+      .filter(([column, value]) => columnNames.has(column) && value.length > 0);
+    const where = activeFilters.length
+      ? ` WHERE ${activeFilters.map(([column]) => `CAST(${quoteMySQLIdentifier(column)} AS CHAR) LIKE ?`).join(" AND ")}`
+      : "";
+    const values = activeFilters.map(([, value]) => `%${value}%`);
 
     const [countResult] = await p.query(
-      `SELECT COUNT(*) as total FROM ${quoteMySQLIdentifier(table)}`
+      `SELECT COUNT(*) as total FROM ${quoteMySQLIdentifier(table)}${where}`,
+      values
     );
     const total = Number((countResult as Record<string, unknown>[])[0]!["total"]);
 
     const offset = (page - 1) * perPage;
-    let query = `SELECT * FROM ${quoteMySQLIdentifier(table)}`;
+    let query = `SELECT * FROM ${quoteMySQLIdentifier(table)}${where}`;
     if (sort) {
       const dir = order === "desc" ? "DESC" : "ASC";
       query += ` ORDER BY ${quoteMySQLIdentifier(sort)} ${dir}`;
     }
     query += ` LIMIT ${perPage} OFFSET ${offset}`;
 
-    const [rows] = await p.query(query);
+    const [rows] = await p.query(query, values);
     const dataRows = rows as Record<string, unknown>[];
-    const fields = dataRows.length > 0 ? Object.keys(dataRows[0]!) : [];
+    const fields = columns.map((column) => column.name);
 
     return { rows: dataRows, total, fields };
+  }
+
+  async getTableRows(table: string): Promise<Record<string, unknown>[]> {
+    const p = await this.getPool();
+    const [rows] = await p.query(`SELECT * FROM ${quoteMySQLIdentifier(table)}`);
+    return rows as Record<string, unknown>[];
   }
 
   async getRow(

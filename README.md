@@ -160,14 +160,14 @@ database engines.
 
 ### 2. Daily Query Workflow
 
-- [ ] Save and switch between multiple connections
-- [ ] Connect with database URLs such as `mysql://` and `postgresql://`
-- [ ] Add query history, saved queries, and reusable snippets
-- [ ] Add SQL autocomplete for schemas, tables, columns, and keywords
-- [ ] Add keyboard shortcuts and a better query editor experience
-- [ ] Export query results and table data to CSV and JSON
-- [ ] Add table search and column-level data filters
-- [ ] Add `EXPLAIN` and query-plan viewing
+- [x] Save and switch between multiple connections for the current session
+- [x] Connect with `mysql://` database URLs (PostgreSQL URLs follow PostgreSQL driver support)
+- [x] Add query history, saved queries, and reusable snippets
+- [x] Add SQL autocomplete for schemas, tables, columns, and keywords
+- [x] Add keyboard shortcuts and a better query editor experience
+- [x] Export query results and table data to CSV and JSON
+- [x] Add table search and column-level data filters
+- [x] Add `EXPLAIN` and query-plan viewing
 
 ### 3. Schema Management
 

@@ -11,7 +11,11 @@ export function registerQueryRoutes(): void {
     if (!requireConnection(ctx, res)) return;
     const databases = await db.listDatabases(ctx.sessionId!);
     sendHtml(res, 200, views.sqlPage({
-      ...queryPageProps(ctx.sessionId!, null, [], databases),
+      ...queryPageProps(ctx.sessionId!, null, [], databases, {
+        schemas: databases,
+        tables: [],
+        columns: [],
+      }),
       ...(ctx.query["sql"] ? { sql: ctx.query["sql"] } : {}),
     }));
   });
@@ -28,9 +32,13 @@ export function registerQueryRoutes(): void {
     if (!requireConnection(ctx, res)) return;
     const dbName = ctx.params["db"]!;
     db.setCurrentDatabase(ctx.sessionId!, dbName);
-    const tables = await db.listTables(ctx.sessionId!);
+    const [tables, databases] = await Promise.all([
+      db.listTables(ctx.sessionId!),
+      db.listDatabases(ctx.sessionId!),
+    ]);
+    const autocomplete = await loadAutocomplete(ctx.sessionId!, tables, databases);
     sendHtml(res, 200, views.sqlPage({
-      ...queryPageProps(ctx.sessionId!, dbName, tables),
+      ...queryPageProps(ctx.sessionId!, dbName, tables, databases, autocomplete),
       ...(ctx.query["sql"] ? { sql: ctx.query["sql"] } : {}),
     }));
   });
@@ -59,8 +67,13 @@ async function executeAndRender(
   const startedAt = performance.now();
   const result = await db.executeQuery(ctx.sessionId!, sql, { queryId, timeoutMs });
   const executionTimeMs = Math.max(0, Math.round((performance.now() - startedAt) * 10) / 10);
+  const pageTables = database ? await db.listTables(ctx.sessionId!) : tables;
+  const pageDatabases = database ? await db.listDatabases(ctx.sessionId!) : databases;
+  const autocomplete = database
+    ? await loadAutocomplete(ctx.sessionId!, pageTables, pageDatabases)
+    : { schemas: databases, tables: [], columns: [] };
   sendHtml(res, 200, views.sqlPage({
-    ...queryPageProps(ctx.sessionId!, database, tables, databases),
+    ...queryPageProps(ctx.sessionId!, database, pageTables, pageDatabases, autocomplete),
     result,
     sql,
     queryTimeoutMs: timeoutMs,
@@ -80,7 +93,12 @@ function queryPageProps(
   sessionId: string,
   database: string | null,
   tables: { name: string }[],
-  databases: string[] = []
+  databases: string[] = [],
+  autocomplete: { schemas: string[]; tables: string[]; columns: string[] } = {
+    schemas: [],
+    tables: [],
+    columns: [],
+  }
 ) {
   const connection = db.getConnection(sessionId);
   return {
@@ -91,6 +109,22 @@ function queryPageProps(
     queryTimeoutMs: connection?.queryTimeoutMs ?? 30_000,
     canCancel: connection?.type === "mysql",
     explainPrefix: connection?.type === "sqlite" ? "EXPLAIN QUERY PLAN " : "EXPLAIN ",
+    autocomplete,
+  };
+}
+
+async function loadAutocomplete(
+  sessionId: string,
+  tables: { name: string }[],
+  schemas: string[]
+): Promise<{ schemas: string[]; tables: string[]; columns: string[] }> {
+  const structures = await Promise.all(
+    tables.map(({ name }) => db.getTableStructure(sessionId, name).catch(() => []))
+  );
+  return {
+    schemas,
+    tables: tables.map(({ name }) => name),
+    columns: [...new Set(structures.flatMap((columns) => columns.map(({ name }) => name)))],
   };
 }
 

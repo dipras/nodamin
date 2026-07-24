@@ -11,6 +11,7 @@ export interface DbConnection {
   port?: number;
   user?: string;
   password?: string;
+  database?: string;
   // SQLite fields
   filePath?: string;
   temporaryFile?: boolean;

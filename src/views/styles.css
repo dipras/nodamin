@@ -86,6 +86,114 @@ body {
   transition: background 0.2s, color 0.2s;
 }
 
+.connection-list {
+  display: grid;
+  gap: 0;
+}
+
+.connection-list-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.connection-list-item:last-child {
+  border-bottom: 0;
+}
+
+.connection-list-item .actions,
+.connection-list-item form {
+  margin: 0;
+}
+
+.connection-meta {
+  margin-top: 5px;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.column-filter-row th {
+  padding: 5px;
+}
+
+.column-filter-row form {
+  margin: 0;
+}
+
+.column-filter-row input {
+  min-width: 90px;
+  width: 100%;
+  padding: 6px 8px;
+  font-size: 12px;
+}
+
+.active-filters {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 10px 0;
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.sql-code-editor {
+  position: relative;
+}
+
+.sql-suggestions {
+  position: absolute;
+  z-index: 20;
+  left: 12px;
+  top: calc(100% - 12px);
+  width: min(360px, calc(100% - 24px));
+  max-height: 240px;
+  overflow: auto;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-md);
+}
+
+.sql-suggestions button {
+  display: block;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+
+.sql-suggestions button:hover {
+  background: var(--bg3);
+}
+
+.saved-query-heading {
+  margin-top: 18px;
+}
+
+.saved-query-item {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.saved-query-item .query-history-item {
+  flex: 1;
+}
+
+.query-result-actions {
+  display: inline-flex;
+  gap: 10px;
+  margin-left: auto;
+}
+
 a {
   color: var(--primary);
   text-decoration: none;

@@ -2,9 +2,10 @@
 
 Dokumen ini adalah router konteks lintas-sesi untuk repo **Nodamin**. Source code dan
 `package.json` adalah source of truth; jika dokumen ini berbeda dari implementasi, ikuti source lalu
-perbarui dokumen secara atomik. Terakhir diperbarui: 2026-07-24. Jangan simpan secret atau kredensial
-database di sini. Guardrails universal: semua state koneksi database harus tetap terisolasi per
-`sessionId`; perubahan kapabilitas database harus menjaga kontrak `DatabaseDriver` dan perilaku
+perbarui dokumen secara atomik. Terakhir diperbarui: 2026-07-25. Jangan simpan secret atau kredensial
+database di sini. Guardrails universal: semua koleksi koneksi database dan pilihan koneksi aktif
+harus tetap terisolasi per `sessionId`; perubahan kapabilitas database harus menjaga kontrak
+`DatabaseDriver` dan perilaku
 MySQL/SQLite tetap selaras; jangan edit `src/views/compiled.ts` atau `src/views/assets.ts` secara
 manual karena keduanya generated; pertahankan urutan route spesifik sebelum route parametrik yang
 lebih generik; jangan melakukan operasi git destruktif atau menimpa perubahan lokal pengguna.
@@ -54,7 +55,7 @@ src/routes/*.ts               handler per domain: connection, schema/import, que
 src/session.ts                cookie session dan in-memory session lifetime
 src/types.ts                  tipe lintas-layer
 src/db/driver.ts              kontrak kapabilitas semua driver
-src/db/index.ts               facade + Map sessionId -> DatabaseDriver
+src/db/index.ts               facade + koleksi driver dan koneksi aktif per sessionId
 src/db/sql.ts                 parser statement SQL dan klasifikasi query read-only
 src/db/mysql.ts               implementasi MySQL berbasis connection pool
 src/db/sqlite.ts              implementasi SQLite berbasis satu file/in-memory DB
@@ -93,15 +94,17 @@ dikirim ke client.
 
 - Cookie `nodamin_session` menunjuk ke session in-memory dengan timeout satu jam; akses valid
   memperbarui `lastAccessedAt`, dan cleanup berjalan tiap lima menit.
-- `src/db/index.ts` menyimpan satu instance driver per `sessionId`. Jangan memperkenalkan singleton
-  koneksi global atau mengakses driver tanpa `sessionId`.
-- Flow connect: bentuk `DbConnection` → `testConnection()` memakai driver sementara → buat session
-  dan cookie → `db.connect(sessionId, conn)`. Flow disconnect harus menutup driver, menghapus mapping,
-  dan membersihkan cookie.
+- `src/db/index.ts` menyimpan koleksi instance driver dan satu `activeId` per `sessionId`. Jangan
+  memperkenalkan singleton koneksi global, mencampur koleksi antar-session, atau mengakses driver
+  tanpa `sessionId`.
+- Flow connect: bentuk `DbConnection` (form atau URL MySQL) → `testConnection()` memakai driver
+  sementara → buat atau gunakan session dan cookie → `db.connect(sessionId, conn)`. Menambah koneksi
+  mempertahankan driver lain dalam session; switch hanya mengganti `activeId`. Flow logout/expiry
+  harus menutup seluruh driver, menghapus mapping, dan membersihkan cookie.
 - `DbConnection.readOnly` dan `queryTimeoutMs` adalah setting per koneksi. Read-only harus ditegakkan
   di driver/facade, bukan hanya dengan menyembunyikan tombol UI.
-- Mengganti tipe driver pada session yang sama harus memutus instance lama sebelum membuat driver
-  baru.
+- Mengganti koneksi pada ID yang sama harus memutus instance lama sebelum membuat driver baru;
+  menambah ID berbeda tidak boleh memutus driver lain dalam session tersebut.
 - State session dan koneksi tidak persisten; restart proses menghapus semuanya. SQLite `:memory:`
   juga kehilangan seluruh data saat proses berhenti.
 

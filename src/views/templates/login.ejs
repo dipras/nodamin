@@ -1,12 +1,18 @@
 <div style="max-width:440px;margin:60px auto;">
   <div class="card">
-    <h2>🔌 Connect to Database</h2>
+    <h2>🔌 <%= data.adding ? 'Add Connection' : 'Connect to Database' %></h2>
     <% if (data.error) { %>
       <div class="msg msg-error">
         <%= data.error %>
       </div>
       <% } %>
         <form method="POST" action="/connect" enctype="multipart/form-data">
+          <div class="form-group">
+            <label>Database URL (optional)</label>
+            <input type="url" name="connectionUrl" placeholder="mysql://user:password@localhost:3306/database"
+              style="width:100%">
+            <small style="color:var(--text-muted,#888);">When set, this overrides the MySQL fields below.</small>
+          </div>
           <div class="form-group">
             <label>Database Type</label>
             <select name="type" id="dbType" style="width:100%" onchange="toggleDbFields()">
@@ -89,7 +95,10 @@
           </small>
 
           <button type="submit" class="btn btn-primary"
-            style="width:100%;justify-content:center;margin-top:8px;">Connect</button>
+            style="width:100%;justify-content:center;margin-top:8px;"><%= data.adding ? 'Add & Switch' : 'Connect' %></button>
+          <% if (data.adding) { %>
+            <a href="/connections" class="btn" style="width:100%;justify-content:center;margin-top:8px;">Cancel</a>
+          <% } %>
         </form>
   </div>
 </div>

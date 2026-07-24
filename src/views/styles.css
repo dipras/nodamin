@@ -24,6 +24,10 @@
   --btnText: #E5E4D9;
   --shadow-sm: 0 1px 2px rgba(29, 29, 31, 0.05);
   --shadow-md: 0 10px 30px rgba(29, 29, 31, 0.09);
+  --scrollbar-track: #eef0f4;
+  --scrollbar-thumb: #b2b7c1;
+  --scrollbar-thumb-hover: #858c98;
+  color-scheme: light;
 }
 
 /* Dark Mode */
@@ -42,6 +46,36 @@
   --btnText:#1a1b26;
   --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.24);
   --shadow-md: 0 14px 34px rgba(0, 0, 0, 0.28);
+  --scrollbar-track: #12141c;
+  --scrollbar-thumb: #3b4053;
+  --scrollbar-thumb-hover: #59617a;
+  color-scheme: dark;
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--scrollbar-thumb) var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: var(--scrollbar-track);
+}
+
+*::-webkit-scrollbar-thumb {
+  min-width: 28px;
+  min-height: 28px;
+  border-radius: 999px;
+  background: var(--scrollbar-thumb);
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: var(--scrollbar-thumb-hover);
 }
 
 body {
@@ -460,6 +494,73 @@ textarea {
   overflow-x: auto;
   max-height: calc(100vh - 280px);
   overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.browse-table-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.browse-table .browse-actions-heading,
+.browse-table .browse-actions-cell {
+  position: sticky;
+  right: 0;
+  width: 1%;
+  min-width: 112px;
+  max-width: none;
+  overflow: visible;
+  border-left: 1px solid var(--border);
+}
+
+.browse-table .browse-actions-heading {
+  z-index: 8;
+  background: var(--bg3);
+  text-align: right;
+}
+
+.browse-table .browse-actions-heading span {
+  opacity: 0.65;
+}
+
+.browse-table .browse-actions-cell {
+  z-index: 4;
+  background: var(--bg2);
+  transition: background 0.15s ease, box-shadow 0.15s ease;
+}
+
+.browse-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 4px;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(5px);
+  pointer-events: none;
+  transition: opacity 0.14s ease, visibility 0.14s ease, transform 0.14s ease;
+}
+
+.browse-table tbody tr:hover .browse-actions-cell,
+.browse-table tbody tr:focus-within .browse-actions-cell {
+  background: color-mix(in srgb, var(--primary) 6%, var(--bg2));
+  box-shadow: -12px 0 18px -16px rgba(0, 0, 0, 0.8);
+}
+
+.browse-table tbody tr:hover .browse-row-actions,
+.browse-table tbody tr:focus-within .browse-row-actions {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  pointer-events: auto;
+}
+
+@media (hover: none) and (pointer: coarse) {
+  .browse-row-actions {
+    opacity: 1;
+    visibility: visible;
+    transform: none;
+    pointer-events: auto;
+  }
 }
 
 .null {

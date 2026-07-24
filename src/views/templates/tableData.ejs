@@ -27,9 +27,9 @@
       <span id="selectedCount" style="font-size: 13px; color: var(--text2); margin-left: auto;"></span>
     </div>
     <% } %>
-    <div class="card" style="padding:0;overflow:hidden;">
+    <div class="card browse-table-card">
       <div class="table-wrap">
-        <table>
+        <table class="browse-table">
           <thead>
             <tr>
               <% if (!data.readOnly) { %>
@@ -43,7 +43,9 @@
               %>
                 <th><a href="<%= sortUrl %>" style="color:inherit;text-decoration:none;"><%= f %><%= sortIcon %></a></th>
               <% }); %>
-              <% if (!data.readOnly) { %><th>Actions</th><% } %>
+              <% if (!data.readOnly) { %>
+                <th class="browse-actions-heading"><span>Actions</span></th>
+              <% } %>
             </tr>
           </thead>
           <tbody>
@@ -65,8 +67,8 @@
                 <% data.fields.forEach(function(f) { %>
                   <td><% if (row[f] === null) { %><span class="null">NULL</span><% } else { %><%= String(row[f]) %><% } %></td>
                 <% }); %>
-                <% if (!data.readOnly) { %><td>
-                  <div style="display:flex;gap:4px;">
+                <% if (!data.readOnly) { %><td class="browse-actions-cell">
+                  <div class="browse-row-actions">
                     <a href="<%= baseUrl %>/edit?<%= whereParams %>" class="btn btn-sm">Edit</a>
                     <button type="button" class="btn btn-sm btn-danger destructive-action"
                       data-action="Delete row" data-confirmation="DELETE"

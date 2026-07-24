@@ -63,6 +63,24 @@ test("layout renders a persistent sidebar toggle on contextual pages", () => {
   assert.match(html, /data-label="users"[\s\S]*?class="active"/);
 });
 
+test("writable table browse keeps row actions sticky and hover-revealed", () => {
+  const html = views.tableDataPage({
+    database: "app",
+    table: "users",
+    fields: ["id", "email"],
+    rows: [{ id: 1, email: "user@example.com" }],
+    total: 1,
+    page: 1,
+    perPage: 50,
+    primaryKeys: ["id"],
+    tables: [{ name: "users" }],
+  });
+  assert.match(html, /class="browse-table"/);
+  assert.match(html, /class="browse-actions-heading"/);
+  assert.match(html, /class="browse-actions-cell"/);
+  assert.match(html, /class="browse-row-actions"/);
+});
+
 test("table list prioritizes safe actions and hides destructive actions in a menu", () => {
   const html = views.tableListPage({
     database: "app",

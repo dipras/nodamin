@@ -21,6 +21,7 @@ export interface DatabaseDriver {
         sort?: string,
         order?: string
     ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }>;
+    getRow(table: string, where: Record<string, unknown>): Promise<Record<string, unknown> | null>;
     executeQuery(sql: string): Promise<QueryResult>;
     insertRow(table: string, data: Record<string, unknown>): Promise<QueryResult>;
     updateRow(

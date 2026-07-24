@@ -13,6 +13,7 @@ export interface DbConnection {
   password?: string;
   // SQLite fields
   filePath?: string;
+  temporaryFile?: boolean;
 }
 
 export interface ServerConfig {

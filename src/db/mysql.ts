@@ -6,6 +6,10 @@ import mysql from "mysql2/promise";
 import type { DatabaseDriver } from "./driver.js";
 import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
 
+export function quoteMySQLIdentifier(identifier: string): string {
+  return `\`${identifier.replace(/`/g, "``")}\``;
+}
+
 export class MySQLDriver implements DatabaseDriver {
   private pool: mysql.Pool | null = null;
   private currentConnection: DbConnection | null = null;
@@ -60,8 +64,9 @@ export class MySQLDriver implements DatabaseDriver {
   }
 
   async testConnection(conn: DbConnection): Promise<boolean> {
+    let testPool: mysql.Pool | null = null;
     try {
-      const testPool = mysql.createPool({
+      testPool = mysql.createPool({
         host: conn.host ?? "localhost",
         port: conn.port ?? 3306,
         user: conn.user ?? "root",
@@ -69,10 +74,11 @@ export class MySQLDriver implements DatabaseDriver {
         connectionLimit: 1,
       });
       await testPool.query("SELECT 1");
-      await testPool.end();
       return true;
     } catch {
       return false;
+    } finally {
+      await testPool?.end().catch(() => { });
     }
   }
 
@@ -141,15 +147,15 @@ export class MySQLDriver implements DatabaseDriver {
     const p = await this.getPool();
 
     const [countResult] = await p.query(
-      `SELECT COUNT(*) as total FROM \`${table}\``
+      `SELECT COUNT(*) as total FROM ${quoteMySQLIdentifier(table)}`
     );
     const total = Number((countResult as Record<string, unknown>[])[0]!["total"]);
 
     const offset = (page - 1) * perPage;
-    let query = `SELECT * FROM \`${table}\``;
+    let query = `SELECT * FROM ${quoteMySQLIdentifier(table)}`;
     if (sort) {
       const dir = order === "desc" ? "DESC" : "ASC";
-      query += ` ORDER BY \`${sort}\` ${dir}`;
+      query += ` ORDER BY ${quoteMySQLIdentifier(sort)} ${dir}`;
     }
     query += ` LIMIT ${perPage} OFFSET ${offset}`;
 
@@ -158,6 +164,21 @@ export class MySQLDriver implements DatabaseDriver {
     const fields = dataRows.length > 0 ? Object.keys(dataRows[0]!) : [];
 
     return { rows: dataRows, total, fields };
+  }
+
+  async getRow(
+    table: string,
+    where: Record<string, unknown>
+  ): Promise<Record<string, unknown> | null> {
+    const keys = Object.keys(where);
+    if (keys.length === 0) throw new Error("A row selector is required");
+    const p = await this.getPool();
+    const clauses = keys.map((key) => `${quoteMySQLIdentifier(key)} = ?`).join(" AND ");
+    const [rows] = await p.query(
+      `SELECT * FROM ${quoteMySQLIdentifier(table)} WHERE ${clauses} LIMIT 1`,
+      Object.values(where)
+    );
+    return (rows as Record<string, unknown>[])[0] ?? null;
   }
 
   async executeQuery(sql: string): Promise<QueryResult> {
@@ -203,9 +224,11 @@ export class MySQLDriver implements DatabaseDriver {
   ): Promise<QueryResult> {
     const p = await this.getPool();
     const keys = Object.keys(data);
+    if (keys.length === 0) throw new Error("At least one value is required");
     const placeholders = keys.map(() => "?").join(", ");
     const values = keys.map((k) => data[k]);
-    const sql = `INSERT INTO \`${table}\` (\`${keys.join("`, `")}\`) VALUES (${placeholders})`;
+    const columns = keys.map(quoteMySQLIdentifier).join(", ");
+    const sql = `INSERT INTO ${quoteMySQLIdentifier(table)} (${columns}) VALUES (${placeholders})`;
     const [result] = await p.query(sql, values);
     const r = result as mysql.ResultSetHeader;
     return {
@@ -222,14 +245,16 @@ export class MySQLDriver implements DatabaseDriver {
     where: Record<string, unknown>
   ): Promise<QueryResult> {
     const p = await this.getPool();
+    if (Object.keys(data).length === 0) throw new Error("At least one value is required");
+    if (Object.keys(where).length === 0) throw new Error("A row selector is required");
     const setClauses = Object.keys(data)
-      .map((k) => `\`${k}\` = ?`)
+      .map((k) => `${quoteMySQLIdentifier(k)} = ?`)
       .join(", ");
     const whereClauses = Object.keys(where)
-      .map((k) => `\`${k}\` = ?`)
+      .map((k) => `${quoteMySQLIdentifier(k)} = ?`)
       .join(" AND ");
     const values = [...Object.values(data), ...Object.values(where)];
-    const sql = `UPDATE \`${table}\` SET ${setClauses} WHERE ${whereClauses}`;
+    const sql = `UPDATE ${quoteMySQLIdentifier(table)} SET ${setClauses} WHERE ${whereClauses}`;
     const [result] = await p.query(sql, values);
     const r = result as mysql.ResultSetHeader;
     return {
@@ -245,11 +270,12 @@ export class MySQLDriver implements DatabaseDriver {
     where: Record<string, unknown>
   ): Promise<QueryResult> {
     const p = await this.getPool();
+    if (Object.keys(where).length === 0) throw new Error("A row selector is required");
     const whereClauses = Object.keys(where)
-      .map((k) => `\`${k}\` = ?`)
+      .map((k) => `${quoteMySQLIdentifier(k)} = ?`)
       .join(" AND ");
     const values = Object.values(where);
-    const sql = `DELETE FROM \`${table}\` WHERE ${whereClauses}`;
+    const sql = `DELETE FROM ${quoteMySQLIdentifier(table)} WHERE ${whereClauses}`;
     const [result] = await p.query(sql, values);
     const r = result as mysql.ResultSetHeader;
     return {
@@ -261,19 +287,19 @@ export class MySQLDriver implements DatabaseDriver {
   }
 
   async dropTable(table: string): Promise<QueryResult> {
-    return this.executeQuery(`DROP TABLE \`${table}\``);
+    return this.executeQuery(`DROP TABLE ${quoteMySQLIdentifier(table)}`);
   }
 
   async truncateTable(table: string): Promise<QueryResult> {
-    return this.executeQuery(`TRUNCATE TABLE \`${table}\``);
+    return this.executeQuery(`TRUNCATE TABLE ${quoteMySQLIdentifier(table)}`);
   }
 
   async createDatabase(name: string): Promise<QueryResult> {
-    return this.executeQuery(`CREATE DATABASE \`${name}\``);
+    return this.executeQuery(`CREATE DATABASE ${quoteMySQLIdentifier(name)}`);
   }
 
   async dropDatabase(name: string): Promise<QueryResult> {
-    return this.executeQuery(`DROP DATABASE \`${name}\``);
+    return this.executeQuery(`DROP DATABASE ${quoteMySQLIdentifier(name)}`);
   }
 
   async createTable(
@@ -281,7 +307,7 @@ export class MySQLDriver implements DatabaseDriver {
     columns: { name: string; type: string; nullable: boolean; primary: boolean; autoIncrement: boolean; defaultValue?: string }[]
   ): Promise<QueryResult> {
     const columnDefs = columns.map((col) => {
-      let def = `\`${col.name}\` ${col.type}`;
+      let def = `${quoteMySQLIdentifier(col.name)} ${col.type}`;
       if (!col.nullable) def += " NOT NULL";
       if (col.autoIncrement) def += " AUTO_INCREMENT";
       if (col.defaultValue) def += ` DEFAULT ${col.defaultValue}`;
@@ -290,10 +316,10 @@ export class MySQLDriver implements DatabaseDriver {
 
     const primaryKeys = columns.filter((c) => c.primary).map((c) => c.name);
     if (primaryKeys.length > 0) {
-      columnDefs.push(`PRIMARY KEY (\`${primaryKeys.join("`, `")}\`)`);
+      columnDefs.push(`PRIMARY KEY (${primaryKeys.map(quoteMySQLIdentifier).join(", ")})`);
     }
 
-    const sql = `CREATE TABLE \`${table}\` (\n  ${columnDefs.join(",\n  ")}\n)`;
+    const sql = `CREATE TABLE ${quoteMySQLIdentifier(table)} (\n  ${columnDefs.join(",\n  ")}\n)`;
     console.log("Creating table with SQL:", sql);
     const result = await this.executeQuery(sql);
     console.log("Create table result:", result);
@@ -303,22 +329,23 @@ export class MySQLDriver implements DatabaseDriver {
   async exportTable(table: string, structureOnly: boolean = false): Promise<string> {
     const p = await this.getPool();
 
-    const [createRows] = await p.query(`SHOW CREATE TABLE \`${table}\``);
+    const quotedTable = quoteMySQLIdentifier(table);
+    const [createRows] = await p.query(`SHOW CREATE TABLE ${quotedTable}`);
     const createTableSQL = (createRows as any[])[0]["Create Table"];
 
     let dump = `-- Table: ${table}\n`;
     dump += `-- Generated: ${new Date().toISOString()}\n`;
     dump += structureOnly ? `-- Export: Structure Only\n\n` : `-- Export: Structure and Data\n\n`;
-    dump += `DROP TABLE IF EXISTS \`${table}\`;\n`;
+    dump += `DROP TABLE IF EXISTS ${quotedTable};\n`;
     dump += createTableSQL + ";\n\n";
 
     if (!structureOnly) {
-      const [rows] = await p.query(`SELECT * FROM \`${table}\``);
+      const [rows] = await p.query(`SELECT * FROM ${quotedTable}`);
       const data = rows as Record<string, unknown>[];
 
       if (data.length > 0) {
         const columns = Object.keys(data[0]!);
-        dump += `INSERT INTO \`${table}\` (\`${columns.join("`, `")}\`) VALUES\n`;
+        dump += `INSERT INTO ${quotedTable} (${columns.map(quoteMySQLIdentifier).join(", ")}) VALUES\n`;
 
         const values = data.map((row) => {
           const vals = columns.map((col) => {
@@ -366,8 +393,9 @@ export class MySQLDriver implements DatabaseDriver {
     let dump = `-- Database: ${this.currentDatabase}\n`;
     dump += `-- Generated: ${new Date().toISOString()}\n`;
     dump += structureOnly ? `-- Export: Structure Only\n\n` : `-- Export: Structure and Data\n\n`;
-    dump += `CREATE DATABASE IF NOT EXISTS \`${this.currentDatabase}\`;\n`;
-    dump += `USE \`${this.currentDatabase}\`;\n\n`;
+    const quotedDatabase = quoteMySQLIdentifier(this.currentDatabase);
+    dump += `CREATE DATABASE IF NOT EXISTS ${quotedDatabase};\n`;
+    dump += `USE ${quotedDatabase};\n\n`;
 
     const tables = await this.listTables();
 

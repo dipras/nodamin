@@ -102,6 +102,14 @@ export async function getTableData(
     return requireDriver(sessionId).getTableData(table, page, perPage, sort, order);
 }
 
+export async function getRow(
+    sessionId: string,
+    table: string,
+    where: Record<string, unknown>
+): Promise<Record<string, unknown> | null> {
+    return requireDriver(sessionId).getRow(table, where);
+}
+
 export async function executeQuery(sessionId: string, sql: string): Promise<QueryResult> {
     return requireDriver(sessionId).executeQuery(sql);
 }

@@ -11,7 +11,7 @@ import { registerRoutes } from "./routes.js";
 function parseArgs(): { port: number; host?: string } {
   const args = process.argv.slice(2);
   let port = 3088;
-  let host: string | undefined;
+  let host = "127.0.0.1";
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
@@ -21,10 +21,10 @@ function parseArgs(): { port: number; host?: string } {
     } else if (arg?.startsWith("--port=")) {
       port = Number(arg.split("=")[1]) || 3088;
     } else if (arg === "--host" || arg === "-h") {
-      host = args[i + 1];
+      host = args[i + 1] || host;
       i++;
     } else if (arg?.startsWith("--host=")) {
-      host = arg.split("=")[1];
+      host = arg.split("=")[1] || host;
     }
   }
 

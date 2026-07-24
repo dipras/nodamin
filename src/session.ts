@@ -5,6 +5,7 @@
 
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
+import * as db from "./db/index.js";
 
 const SESSION_COOKIE_NAME = "nodamin_session";
 const SESSION_TIMEOUT = 3600000; // 1 hour in milliseconds
@@ -94,6 +95,7 @@ export function createSession(res: ServerResponse): string {
  * Destroy a session and clear cookie
  */
 export function destroySession(sessionId: string): void {
+  db.disconnect(sessionId);
   sessions.delete(sessionId);
 }
 
@@ -124,10 +126,11 @@ export function cleanupExpiredSessions(): void {
   const now = Date.now();
   for (const [sessionId, session] of sessions.entries()) {
     if (now - session.lastAccessedAt > SESSION_TIMEOUT) {
-      sessions.delete(sessionId);
+      destroySession(sessionId);
     }
   }
 }
 
 // Run cleanup every 5 minutes
-setInterval(cleanupExpiredSessions, 300000);
+const cleanupTimer = setInterval(cleanupExpiredSessions, 300000);
+cleanupTimer.unref();

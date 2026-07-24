@@ -4,7 +4,9 @@
 <% } %>
 <div class="actions">
   <button class="btn btn-primary" onclick="showModal('createDb')">+ Create Database</button>
-  <a href="/disconnect" class="btn btn-danger">Disconnect</a>
+  <form method="POST" action="/disconnect" style="display:inline">
+    <button type="submit" class="btn btn-danger">Disconnect</button>
+  </form>
   <a href="/sql" class="btn">📝 SQL Query</a>
 </div>
 <div class="grid-2">

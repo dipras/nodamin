@@ -13,7 +13,7 @@ lebih generik; jangan melakukan operasi git destruktif atau menimpa perubahan lo
 
 | Task | Baca bagian ini | Entry point |
 |---|---|---|
-| Tambah atau ubah route/operasi CRUD | [Request flow dan routing](#request-flow-dan-routing) | `src/routes.ts`, `src/router.ts` |
+| Tambah atau ubah route/operasi CRUD | [Request flow dan routing](#request-flow-dan-routing) | `src/routes.ts`, `src/routes/`, `src/router.ts` |
 | Tambah driver atau kapabilitas database | [Kontrak driver database](#kontrak-driver-database) | `src/db/driver.ts`, `src/db/index.ts` |
 | Ubah perilaku khusus MySQL/SQLite | [Perbedaan driver](#perbedaan-driver) | `src/db/mysql.ts`, `src/db/sqlite.ts` |
 | Ubah halaman, template, CSS, atau browser JS | [Rendering dan generated files](#rendering-dan-generated-files) | `src/views/templates/`, `src/views/pages.ts` |
@@ -36,7 +36,7 @@ database server dan belum menyediakan autentikasi aplikasi terpisah dari form kr
 ## Stack
 
 - TypeScript 5.9, strict mode, ESM/NodeNext; source menargetkan ES2022.
-- Node.js; bundle produksi esbuild 0.27 menargetkan Node 18.
+- Node.js 20+; bundle produksi esbuild 0.27 menargetkan Node 20.
 - HTTP server bawaan Node, router internal, dan `formidable` untuk multipart form.
 - `mysql2/promise` untuk MySQL; `better-sqlite3` untuk SQLite.
 - EJS 4 diprekompilasi; CSS, browser JavaScript, dan favicon di-embed ke bundle.
@@ -48,7 +48,9 @@ database server dan belum menyediakan autentikasi aplikasi terpisah dari form kr
 src/index.ts                  CLI/env parser, registrasi route, start server
 src/server.ts                 node:http server dan boundary error tak tertangani
 src/router.ts                 registrasi/matching route, query/body/multipart parser
-src/routes.ts                 seluruh HTTP handler dan orkestrasi view + database
+src/routes.ts                 orchestrator urutan registrasi tanpa handler
+src/routes/*.ts               handler per domain: connection, schema/import, query, export,
+                              rows, table actions/browse, static, dan guard bersama
 src/session.ts                cookie session dan in-memory session lifetime
 src/types.ts                  tipe lintas-layer
 src/db/driver.ts              kontrak kapabilitas semua driver
@@ -65,9 +67,9 @@ esbuild.config.js             single-file ESM bundle ke dist/nodamin.js
 ```
 
 Alur utama: `index.ts` mendaftarkan handler → `server.ts` meneruskan request ke `router.ts` →
-router membentuk `RouteContext` termasuk `sessionId` → `routes.ts` memanggil facade `db/index.ts`
-dan renderer `views/pages.ts` → driver aktif menjalankan query → HTML atau download dikirim ke
-client.
+router membentuk `RouteContext` termasuk `sessionId` → modul di `routes/` memanggil facade
+`db/index.ts` dan renderer `views/pages.ts` → driver aktif menjalankan query → HTML atau download
+dikirim ke client.
 
 ## Pattern per-domain
 
@@ -142,9 +144,10 @@ client.
 ### Runtime dan build
 
 - CLI menerima `--port`/`-p`, `--host`/`-h`, dan bentuk `--key=value`; env vars menimpa hasil CLI.
-- Default listen adalah `0.0.0.0:3088`, tetapi URL log menampilkan `localhost` untuk wildcard host.
-- Build bundle berawal dari `src/index.ts`, menghasilkan `dist/nodamin.js` ESM, meminifikasi
-  produksi, dan mengecualikan native dependency `better-sqlite3`.
+- Default listen adalah loopback `127.0.0.1:3088`; bind ke wildcard harus dipilih eksplisit lewat
+  CLI atau environment dan hanya aman pada jaringan tepercaya atau di belakang autentikasi.
+- Build bundle berawal dari `src/index.ts`, menghasilkan `dist/nodamin.js` ESM untuk Node 20+,
+  meminifikasi produksi, dan mengecualikan native dependency `better-sqlite3`.
 - Paket npm hanya menerbitkan `dist`; perubahan runtime harus tetap bekerja dari bundle tanpa
   mengandalkan file source/template terpisah.
 
@@ -153,7 +156,7 @@ client.
 | Variable | Default | Efek |
 |---|---:|---|
 | `NODAMIN_PORT` | `3088` | Port HTTP; menimpa nilai CLI jika valid |
-| `NODAMIN_HOST` | `0.0.0.0` | Host/interface bind; menimpa nilai CLI |
+| `NODAMIN_HOST` | `127.0.0.1` | Host/interface bind; menimpa nilai CLI |
 
 ## Skill dan dokumentasi pendukung
 
@@ -179,28 +182,28 @@ client.
 
 ```bash
 npm install
+npm test
 npm run typecheck
 npm run build
 npm run dev
 npm start
 ```
 
-- Gunakan `npm run typecheck` untuk pemeriksaan TypeScript dan generator; gunakan `npm run build`
+- Gunakan `npm test` untuk unit/integration test router, session, quoting identifier, dan SQLite;
+  gunakan `npm run typecheck` untuk pemeriksaan TypeScript dan generator; gunakan `npm run build`
   untuk verifikasi bundle distribusi.
-- Repo belum mendefinisikan script test, lint, atau formatter. Verifikasi perubahan perilaku secara
-  manual pada driver/route yang relevan dan jangan mengklaim coverage otomatis yang tidak ada.
+- Repo belum mendefinisikan script lint atau formatter. Perilaku MySQL tetap memerlukan smoke test
+  dengan server eksternal karena suite lokal hanya menguji helper dialect MySQL.
 - `npm run dev` menggabungkan TypeScript watch dan esbuild watch; hentikan seluruh proses watch saat
   selesai.
 
 ## Known issues
 
 - Belum ada autentikasi aplikasi terpisah; server yang terekspos dapat menampilkan form koneksi DB.
-- Beberapa operasi destruktif masih memakai route GET; perubahan baru sebaiknya tidak memperluas
-  pola ini tanpa audit CSRF dan kompatibilitas UI.
+- Request POST dibatasi oleh pemeriksaan same-origin dan operasi destruktif memakai POST; perubahan
+  baru harus mempertahankan boundary ini.
 - Session, mapping driver, dan SQLite in-memory state hilang saat restart; tidak ada persistence atau
   multi-process coordination.
-- README menyebut dukungan connection URL, tetapi form/type koneksi aktif hanya memodelkan field
-  host/port/user/password; verifikasi implementasi sebelum mengandalkan klaim tersebut.
 - Parser import SQL memisahkan statement pada `;`; script kompleks yang memuat delimiter di string,
   trigger, atau prosedur dapat diproses tidak akurat.
 

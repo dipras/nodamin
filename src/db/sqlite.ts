@@ -4,8 +4,13 @@
 
 import Database from "better-sqlite3";
 import path from "node:path";
+import { unlinkSync } from "node:fs";
 import type { DatabaseDriver } from "./driver.js";
 import type { DbConnection, QueryResult, ColumnInfo, TableInfo } from "../types.js";
+
+export function quoteSQLiteIdentifier(identifier: string): string {
+    return `"${identifier.replace(/"/g, '""')}"`;
+}
 
 export class SQLiteDriver implements DatabaseDriver {
     private db: Database.Database | null = null;
@@ -15,6 +20,7 @@ export class SQLiteDriver implements DatabaseDriver {
     connect(conn: DbConnection): void {
         if (this.db) {
             try { this.db.close(); } catch { }
+            this.cleanupTemporaryFile();
         }
         const filePath = conn.filePath ?? ":memory:";
         this.db = new Database(filePath);
@@ -28,8 +34,19 @@ export class SQLiteDriver implements DatabaseDriver {
             try { this.db.close(); } catch { }
             this.db = null;
         }
+        this.cleanupTemporaryFile();
         this.currentConnection = null;
         this.dbName = null;
+    }
+
+    private cleanupTemporaryFile(): void {
+        const filePath = this.currentConnection?.temporaryFile
+            ? this.currentConnection.filePath
+            : undefined;
+        if (!filePath || filePath === ":memory:") return;
+        for (const candidate of [filePath, `${filePath}-wal`, `${filePath}-shm`]) {
+            try { unlinkSync(candidate); } catch { }
+        }
     }
 
     getConnection(): DbConnection | null {
@@ -80,7 +97,7 @@ export class SQLiteDriver implements DatabaseDriver {
             // Get row count
             let rowCount = 0;
             try {
-                const countResult = db.prepare(`SELECT COUNT(*) as cnt FROM "${r.name}"`).get() as { cnt: number };
+                const countResult = db.prepare(`SELECT COUNT(*) as cnt FROM ${quoteSQLiteIdentifier(r.name)}`).get() as { cnt: number };
                 rowCount = countResult.cnt;
             } catch { }
 
@@ -96,7 +113,7 @@ export class SQLiteDriver implements DatabaseDriver {
 
     async getTableStructure(table: string): Promise<ColumnInfo[]> {
         const db = this.getDb();
-        const rows = db.prepare(`PRAGMA table_info("${table}")`).all() as {
+        const rows = db.prepare(`PRAGMA table_info(${quoteSQLiteIdentifier(table)})`).all() as {
             cid: number;
             name: string;
             type: string;
@@ -139,14 +156,14 @@ export class SQLiteDriver implements DatabaseDriver {
     ): Promise<{ rows: Record<string, unknown>[]; total: number; fields: string[] }> {
         const db = this.getDb();
 
-        const countResult = db.prepare(`SELECT COUNT(*) as total FROM "${table}"`).get() as { total: number };
+        const countResult = db.prepare(`SELECT COUNT(*) as total FROM ${quoteSQLiteIdentifier(table)}`).get() as { total: number };
         const total = countResult.total;
 
         const offset = (page - 1) * perPage;
-        let query = `SELECT * FROM "${table}"`;
+        let query = `SELECT * FROM ${quoteSQLiteIdentifier(table)}`;
         if (sort) {
             const dir = order === "desc" ? "DESC" : "ASC";
-            query += ` ORDER BY "${sort}" ${dir}`;
+            query += ` ORDER BY ${quoteSQLiteIdentifier(sort)} ${dir}`;
         }
         query += ` LIMIT ${perPage} OFFSET ${offset}`;
 
@@ -154,6 +171,18 @@ export class SQLiteDriver implements DatabaseDriver {
         const fields = rows.length > 0 ? Object.keys(rows[0]!) : [];
 
         return { rows, total, fields };
+    }
+
+    async getRow(
+        table: string,
+        where: Record<string, unknown>
+    ): Promise<Record<string, unknown> | null> {
+        const keys = Object.keys(where);
+        if (keys.length === 0) throw new Error("A row selector is required");
+        const clauses = keys.map((key) => `${quoteSQLiteIdentifier(key)} = ?`).join(" AND ");
+        return this.getDb()
+            .prepare(`SELECT * FROM ${quoteSQLiteIdentifier(table)} WHERE ${clauses} LIMIT 1`)
+            .get(...Object.values(where)) as Record<string, unknown> | undefined ?? null;
     }
 
     async executeQuery(sql: string): Promise<QueryResult> {
@@ -200,9 +229,10 @@ export class SQLiteDriver implements DatabaseDriver {
     ): Promise<QueryResult> {
         const db = this.getDb();
         const keys = Object.keys(data);
+        if (keys.length === 0) throw new Error("At least one value is required");
         const placeholders = keys.map(() => "?").join(", ");
         const values = keys.map((k) => data[k]);
-        const sql = `INSERT INTO "${table}" ("${keys.join('", "')}") VALUES (${placeholders})`;
+        const sql = `INSERT INTO ${quoteSQLiteIdentifier(table)} (${keys.map(quoteSQLiteIdentifier).join(", ")}) VALUES (${placeholders})`;
         const result = db.prepare(sql).run(...values);
         return {
             fields: [],
@@ -218,14 +248,16 @@ export class SQLiteDriver implements DatabaseDriver {
         where: Record<string, unknown>
     ): Promise<QueryResult> {
         const db = this.getDb();
+        if (Object.keys(data).length === 0) throw new Error("At least one value is required");
+        if (Object.keys(where).length === 0) throw new Error("A row selector is required");
         const setClauses = Object.keys(data)
-            .map((k) => `"${k}" = ?`)
+            .map((k) => `${quoteSQLiteIdentifier(k)} = ?`)
             .join(", ");
         const whereClauses = Object.keys(where)
-            .map((k) => `"${k}" = ?`)
+            .map((k) => `${quoteSQLiteIdentifier(k)} = ?`)
             .join(" AND ");
         const values = [...Object.values(data), ...Object.values(where)];
-        const sql = `UPDATE "${table}" SET ${setClauses} WHERE ${whereClauses}`;
+        const sql = `UPDATE ${quoteSQLiteIdentifier(table)} SET ${setClauses} WHERE ${whereClauses}`;
         const result = db.prepare(sql).run(...values);
         return {
             fields: [],
@@ -240,11 +272,12 @@ export class SQLiteDriver implements DatabaseDriver {
         where: Record<string, unknown>
     ): Promise<QueryResult> {
         const db = this.getDb();
+        if (Object.keys(where).length === 0) throw new Error("A row selector is required");
         const whereClauses = Object.keys(where)
-            .map((k) => `"${k}" = ?`)
+            .map((k) => `${quoteSQLiteIdentifier(k)} = ?`)
             .join(" AND ");
         const values = Object.values(where);
-        const sql = `DELETE FROM "${table}" WHERE ${whereClauses}`;
+        const sql = `DELETE FROM ${quoteSQLiteIdentifier(table)} WHERE ${whereClauses}`;
         const result = db.prepare(sql).run(...values);
         return {
             fields: [],
@@ -255,12 +288,12 @@ export class SQLiteDriver implements DatabaseDriver {
     }
 
     async dropTable(table: string): Promise<QueryResult> {
-        return this.executeQuery(`DROP TABLE "${table}"`);
+        return this.executeQuery(`DROP TABLE ${quoteSQLiteIdentifier(table)}`);
     }
 
     async truncateTable(table: string): Promise<QueryResult> {
         // SQLite doesn't have TRUNCATE, use DELETE
-        return this.executeQuery(`DELETE FROM "${table}"`);
+        return this.executeQuery(`DELETE FROM ${quoteSQLiteIdentifier(table)}`);
     }
 
     async createDatabase(_name: string): Promise<QueryResult> {
@@ -284,10 +317,10 @@ export class SQLiteDriver implements DatabaseDriver {
         columns: { name: string; type: string; nullable: boolean; primary: boolean; autoIncrement: boolean; defaultValue?: string }[]
     ): Promise<QueryResult> {
         const columnDefs = columns.map((col) => {
-            let def = `"${col.name}" ${col.type}`;
+            let def = `${quoteSQLiteIdentifier(col.name)} ${col.type}`;
             if (col.primary && col.autoIncrement) {
                 // SQLite: INTEGER PRIMARY KEY is auto-increment by default
-                def = `"${col.name}" INTEGER PRIMARY KEY AUTOINCREMENT`;
+                def = `${quoteSQLiteIdentifier(col.name)} INTEGER PRIMARY KEY AUTOINCREMENT`;
                 if (!col.nullable) def += "";
                 return def;
             }
@@ -301,10 +334,10 @@ export class SQLiteDriver implements DatabaseDriver {
             .filter((c) => c.primary && !c.autoIncrement)
             .map((c) => c.name);
         if (primaryKeys.length > 0) {
-            columnDefs.push(`PRIMARY KEY ("${primaryKeys.join('", "')}")`);
+            columnDefs.push(`PRIMARY KEY (${primaryKeys.map(quoteSQLiteIdentifier).join(", ")})`);
         }
 
-        const sql = `CREATE TABLE "${table}" (\n  ${columnDefs.join(",\n  ")}\n)`;
+        const sql = `CREATE TABLE ${quoteSQLiteIdentifier(table)} (\n  ${columnDefs.join(",\n  ")}\n)`;
         console.log("Creating table with SQL:", sql);
         const result = await this.executeQuery(sql);
         console.log("Create table result:", result);
@@ -324,15 +357,16 @@ export class SQLiteDriver implements DatabaseDriver {
         let dump = `-- Table: ${table}\n`;
         dump += `-- Generated: ${new Date().toISOString()}\n`;
         dump += structureOnly ? `-- Export: Structure Only\n\n` : `-- Export: Structure and Data\n\n`;
-        dump += `DROP TABLE IF EXISTS "${table}";\n`;
+        const quotedTable = quoteSQLiteIdentifier(table);
+        dump += `DROP TABLE IF EXISTS ${quotedTable};\n`;
         dump += createTableSQL + ";\n\n";
 
         if (!structureOnly) {
-            const rows = db.prepare(`SELECT * FROM "${table}"`).all() as Record<string, unknown>[];
+            const rows = db.prepare(`SELECT * FROM ${quotedTable}`).all() as Record<string, unknown>[];
 
             if (rows.length > 0) {
                 const columns = Object.keys(rows[0]!);
-                dump += `INSERT INTO "${table}" ("${columns.join('", "')}") VALUES\n`;
+                dump += `INSERT INTO ${quotedTable} (${columns.map(quoteSQLiteIdentifier).join(", ")}) VALUES\n`;
 
                 const values = rows.map((row) => {
                     const vals = columns.map((col) => {

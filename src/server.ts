@@ -15,7 +15,7 @@ export function startServer(config: ServerConfig): void {
     });
   });
 
-  const hostInfo = config.host || "0.0.0.0";
+  const hostInfo = config.host || "127.0.0.1";
   server.listen(config.port, hostInfo, () => {
     console.log("");
     console.log("  ⚡ Nodamin is running!");

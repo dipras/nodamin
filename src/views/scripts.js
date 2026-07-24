@@ -34,7 +34,13 @@
 
 // Modal & confirm functions
 function confirmAction(msg, url) {
-  if (confirm(msg)) window.location.href = url;
+  if (!confirm(msg)) return;
+  const form = document.createElement('form');
+  form.method = 'POST';
+  form.action = url;
+  form.hidden = true;
+  document.body.appendChild(form);
+  form.submit();
 }
 function showModal(id) {
   document.getElementById(id)?.classList.add('active');

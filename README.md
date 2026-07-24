@@ -21,7 +21,7 @@ Nodamin is a web-based database administration tool inspired by [Adminer](https:
 
 ## 🚀 Quick Start
 
-The fastest and easiest way to use Nodamin is via `npx` (requires Node.js):
+The fastest and easiest way to use Nodamin is via `npx` (requires Node.js 20 or newer):
 
 ```bash
 # Automatically download & run via npx
@@ -63,7 +63,7 @@ Nodamin can be configured using CLI arguments or Environment Variables:
 | CLI Argument | Environment Variable | Default | Description |
 | :--- | :--- | :--- | :--- |
 | `--port <number>` | `NODAMIN_PORT` | `3088` | Port for the web interface. |
-| `--host <string>` | `NODAMIN_HOST` | `0.0.0.0` | IP Address/Host to bind the server to. |
+| `--host <string>` | `NODAMIN_HOST` | `127.0.0.1` | IP Address/Host to bind the server to. Use `0.0.0.0` only on a trusted network or behind authentication. |
 
 **Example using Environment Variables:**
 ```bash
@@ -90,12 +90,20 @@ src/
 ├── index.ts           # Entry point & CLI parser
 ├── server.ts          # HTTP server
 ├── router.ts          # Request router & body parser
-├── routes.ts          # Route handlers
+├── routes.ts          # Route registration order only
+├── routes/            # Route handlers grouped by domain
+├── session.ts         # In-memory session lifecycle
 ├── types.ts           # TypeScript type definitions
 ├── db/
-│   └── mysql.ts       # MySQL driver & operations
+│   ├── driver.ts      # Shared database contract
+│   ├── index.ts       # Per-session driver facade
+│   ├── mysql.ts       # MySQL driver
+│   └── sqlite.ts      # SQLite driver
 └── views/
-    └── pages.ts       # HTML templates (embedded)
+    ├── pages.ts       # View-model and rendering
+    ├── templates/     # EJS source templates
+    ├── styles.css     # Embedded stylesheet source
+    └── scripts.js     # Embedded browser behavior
 ```
 
 ## 📋 Current MySQL Features
@@ -147,7 +155,7 @@ src/
 - [ ] **Stored procedures/functions** - View and execute
 - [ ] **User/privileges management** - Manage database users
 - [ ] **ERD viewer** - Visual entity relationship diagram
-- [x] **Connection via URL** - Support connection string format (e.g., `mysql://user:pass@host:port/db`)
+- [ ] **Connection via URL** - Support connection string format (e.g., `mysql://user:pass@host:port/db`)
 - [ ] **Authentication** - Optional login to protect the admin panel
 - [x] **npx support** - Run directly with `npx @dipras/nodamin`
 

@@ -1,5 +1,5 @@
 import esbuild from "esbuild";
-import { writeFileSync, readFileSync, chmodSync } from "fs";
+import { mkdirSync, rmSync } from "node:fs";
 
 const isDev = process.argv.includes("--dev");
 
@@ -8,7 +8,7 @@ const buildOptions = {
   entryPoints: ["src/index.ts"],
   bundle: true,
   platform: "node",
-  target: "node18",
+  target: "node20",
   outfile: "dist/nodamin.js",
   format: "esm",
   banner: {
@@ -29,6 +29,8 @@ if (isDev) {
   await ctx.watch();
   console.log("👀 Watching for changes...");
 } else {
+  mkdirSync("dist", { recursive: true });
+  rmSync("dist/nodamin.js.map", { force: true });
   await esbuild.build(buildOptions);
   console.log("✅ Built dist/nodamin.js");
 }

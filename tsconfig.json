@@ -43,5 +43,6 @@
 
     "moduleResolution": "nodenext",
     "esModuleInterop": true,
-  }
+  },
+  "include": ["src/**/*.ts"]
 }

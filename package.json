@@ -39,26 +39,30 @@
   "bin": {
     "nodamin": "dist/nodamin.js"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build:templates": "node build-templates.js",
     "build:assets": "node build-assets.js",
     "build": "npm run build:templates && npm run build:assets && node esbuild.config.js",
     "start": "node dist/nodamin.js",
     "dev": "npm run build:templates && npm run build:assets && tsc --noEmit --watch & node --watch-path=src esbuild.config.js --dev",
-    "typecheck": "npm run build:templates && npm run build:assets && tsc --noEmit"
+    "typecheck": "npm run build:templates && npm run build:assets && tsc --noEmit",
+    "test": "npm run build:templates && npm run build:assets && tsc -p tsconfig.test.json && node --test .test-dist/test/*.test.js"
   },
   "dependencies": {
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/node": "^25.3.3",
     "better-sqlite3": "^12.6.2",
     "formidable": "^3.5.4",
-    "mysql2": "^3.18.2",
-    "typescript": "^5.9.3"
+    "mysql2": "^3.18.2"
   },
   "devDependencies": {
     "@types/ejs": "^3.1.5",
+    "@types/better-sqlite3": "^7.6.13",
     "@types/formidable": "^3.4.7",
+    "@types/node": "^25.3.3",
     "ejs": "^4.0.1",
-    "esbuild": "^0.27.3"
+    "esbuild": "^0.27.3",
+    "typescript": "^5.9.3"
   }
 }

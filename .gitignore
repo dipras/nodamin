@@ -2,3 +2,5 @@ node_modules
 src/views/compiled.ts
 src/views/assets.ts
 dist
+graphify-out
+.codex/hooks.json

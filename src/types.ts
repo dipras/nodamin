@@ -46,6 +46,29 @@ export interface ColumnInfo {
   extra: string;
 }
 
+export interface ColumnDefinition {
+  name: string;
+  type: string;
+  nullable: boolean;
+  defaultValue?: string;
+}
+
+export interface IndexInfo {
+  name: string;
+  unique: boolean;
+  columns: string[];
+  primary: boolean;
+}
+
+export interface ForeignKeyInfo {
+  name: string;
+  columns: string[];
+  referencedTable: string;
+  referencedColumns: string[];
+  onUpdate: string;
+  onDelete: string;
+}
+
 export interface TableInfo {
   name: string;
   engine: string;

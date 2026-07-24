@@ -10,6 +10,9 @@ import type {
   QueryExecutionOptions,
   QueryResult,
   ColumnInfo,
+  ColumnDefinition,
+  ForeignKeyInfo,
+  IndexInfo,
   TableInfo,
 } from "../types.js";
 import {
@@ -85,6 +88,14 @@ export class MySQLDriver implements DatabaseDriver {
     return this.pool;
   }
 
+  private async executeSchemaQuery(sql: string): Promise<QueryResult> {
+    const result = await this.executeQuery(sql);
+    if (result.message?.startsWith("Error:")) {
+      throw new Error(result.message.slice("Error:".length).trim());
+    }
+    return result;
+  }
+
   async testConnection(conn: DbConnection): Promise<boolean> {
     let testPool: mysql.Pool | null = null;
     try {
@@ -158,6 +169,135 @@ export class MySQLDriver implements DatabaseDriver {
       defaultValue: r["defaultValue"],
       extra: (r["extra"] as string) ?? "",
     }));
+  }
+
+  async addColumn(table: string, column: ColumnDefinition): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} ADD COLUMN ${mysqlColumnDefinition(column)}`
+    );
+  }
+
+  async modifyColumn(
+    table: string,
+    column: string,
+    definition: ColumnDefinition
+  ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} MODIFY COLUMN ${mysqlColumnDefinition(definition)}`
+    );
+  }
+
+  async renameColumn(table: string, column: string, newName: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} RENAME COLUMN ${quoteMySQLIdentifier(column)} TO ${quoteMySQLIdentifier(newName)}`
+    );
+  }
+
+  async dropColumn(table: string, column: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} DROP COLUMN ${quoteMySQLIdentifier(column)}`
+    );
+  }
+
+  async listIndexes(table: string): Promise<IndexInfo[]> {
+    const p = await this.getPool();
+    const [rows] = await p.query(
+      `SELECT INDEX_NAME AS name, NON_UNIQUE AS nonUnique, COLUMN_NAME AS columnName,
+              SEQ_IN_INDEX AS sequence
+       FROM information_schema.STATISTICS
+       WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+       ORDER BY INDEX_NAME, SEQ_IN_INDEX`,
+      [this.currentDatabase, table]
+    );
+    const indexes = new Map<string, IndexInfo>();
+    for (const row of rows as Record<string, unknown>[]) {
+      const name = String(row["name"]);
+      const current = indexes.get(name) ?? {
+        name,
+        unique: Number(row["nonUnique"]) === 0,
+        columns: [],
+        primary: name === "PRIMARY",
+      };
+      current.columns.push(String(row["columnName"]));
+      indexes.set(name, current);
+    }
+    return [...indexes.values()];
+  }
+
+  async createIndex(
+    table: string,
+    name: string,
+    columns: string[],
+    unique: boolean
+  ): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    if (columns.length === 0) throw new Error("Choose at least one index column");
+    return this.executeSchemaQuery(
+      `CREATE ${unique ? "UNIQUE " : ""}INDEX ${quoteMySQLIdentifier(name)} ON ${quoteMySQLIdentifier(table)} (${columns.map(quoteMySQLIdentifier).join(", ")})`
+    );
+  }
+
+  async dropIndex(table: string, name: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    if (name === "PRIMARY") throw new Error("Primary keys cannot be dropped as regular indexes");
+    return this.executeSchemaQuery(
+      `DROP INDEX ${quoteMySQLIdentifier(name)} ON ${quoteMySQLIdentifier(table)}`
+    );
+  }
+
+  async listForeignKeys(table: string): Promise<ForeignKeyInfo[]> {
+    const p = await this.getPool();
+    const [rows] = await p.query(
+      `SELECT k.CONSTRAINT_NAME AS name, k.COLUMN_NAME AS columnName,
+              k.REFERENCED_TABLE_NAME AS referencedTable,
+              k.REFERENCED_COLUMN_NAME AS referencedColumn,
+              r.UPDATE_RULE AS onUpdate, r.DELETE_RULE AS onDelete,
+              k.ORDINAL_POSITION AS position
+       FROM information_schema.KEY_COLUMN_USAGE k
+       JOIN information_schema.REFERENTIAL_CONSTRAINTS r
+         ON r.CONSTRAINT_SCHEMA = k.CONSTRAINT_SCHEMA
+        AND r.CONSTRAINT_NAME = k.CONSTRAINT_NAME
+        AND r.TABLE_NAME = k.TABLE_NAME
+       WHERE k.TABLE_SCHEMA = ? AND k.TABLE_NAME = ?
+         AND k.REFERENCED_TABLE_NAME IS NOT NULL
+       ORDER BY k.CONSTRAINT_NAME, k.ORDINAL_POSITION`,
+      [this.currentDatabase, table]
+    );
+    const foreignKeys = new Map<string, ForeignKeyInfo>();
+    for (const row of rows as Record<string, unknown>[]) {
+      const name = String(row["name"]);
+      const current = foreignKeys.get(name) ?? {
+        name,
+        columns: [],
+        referencedTable: String(row["referencedTable"]),
+        referencedColumns: [],
+        onUpdate: String(row["onUpdate"]),
+        onDelete: String(row["onDelete"]),
+      };
+      current.columns.push(String(row["columnName"]));
+      current.referencedColumns.push(String(row["referencedColumn"]));
+      foreignKeys.set(name, current);
+    }
+    return [...foreignKeys.values()];
+  }
+
+  async createForeignKey(table: string, foreignKey: ForeignKeyInfo): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    validateForeignKey(foreignKey);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} ADD CONSTRAINT ${quoteMySQLIdentifier(foreignKey.name)} FOREIGN KEY (${foreignKey.columns.map(quoteMySQLIdentifier).join(", ")}) REFERENCES ${quoteMySQLIdentifier(foreignKey.referencedTable)} (${foreignKey.referencedColumns.map(quoteMySQLIdentifier).join(", ")}) ON UPDATE ${foreignAction(foreignKey.onUpdate)} ON DELETE ${foreignAction(foreignKey.onDelete)}`
+    );
+  }
+
+  async dropForeignKey(table: string, name: string): Promise<QueryResult> {
+    assertWritable(this.currentConnection?.readOnly);
+    return this.executeSchemaQuery(
+      `ALTER TABLE ${quoteMySQLIdentifier(table)} DROP FOREIGN KEY ${quoteMySQLIdentifier(name)}`
+    );
   }
 
   async getTableData(
@@ -513,4 +653,39 @@ export class MySQLDriver implements DatabaseDriver {
 function normalizeTimeout(value: number | undefined): number | undefined {
   if (!value || !Number.isFinite(value)) return undefined;
   return Math.min(300_000, Math.max(100, Math.round(value)));
+}
+
+function mysqlColumnDefinition(column: ColumnDefinition): string {
+  if (!/^[a-zA-Z][a-zA-Z0-9_]*(?:\s*\(\s*\d+(?:\s*,\s*\d+)?\s*\))?(?:\s+UNSIGNED)?$/i.test(column.type.trim())) {
+    throw new Error("Invalid column type");
+  }
+  let sql = `${quoteMySQLIdentifier(column.name)} ${column.type.trim()}`;
+  sql += column.nullable ? " NULL" : " NOT NULL";
+  if (column.defaultValue?.trim()) sql += ` DEFAULT ${validatedDefault(column.defaultValue)}`;
+  return sql;
+}
+
+function validatedDefault(value: string): string {
+  const normalized = value.trim();
+  if (!/^(?:NULL|[-+]?\d+(?:\.\d+)?|'(?:''|[^'])*'|"(?:[^"]|"")*"|CURRENT_(?:TIME|DATE|TIMESTAMP)(?:\(\))?)$/i.test(normalized)) {
+    throw new Error("Invalid default value");
+  }
+  return normalized;
+}
+
+function foreignAction(action: string): string {
+  const normalized = action.trim().toUpperCase();
+  if (!["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"].includes(normalized)) {
+    throw new Error("Invalid foreign-key action");
+  }
+  return normalized;
+}
+
+function validateForeignKey(foreignKey: ForeignKeyInfo): void {
+  if (
+    foreignKey.columns.length === 0
+    || foreignKey.columns.length !== foreignKey.referencedColumns.length
+  ) {
+    throw new Error("Foreign-key columns must have matching referenced columns");
+  }
 }

@@ -112,6 +112,8 @@ dikirim ke client.
 
 - `DatabaseDriver` adalah batas kapabilitas lintas database. Tambah/ubah operasi di interface,
   facade `src/db/index.ts`, dan setiap implementasi driver dalam perubahan yang sama.
+- Metadata dan mutasi schema memakai `ColumnDefinition`, `IndexInfo`, dan `ForeignKeyInfo` yang
+  dinormalisasi lintas-driver. Route/view tidak boleh mengandalkan bentuk metadata native database.
 - Raw query menerima `QueryExecutionOptions`; query aktif dapat dibatalkan lewat `cancelQuery()`.
   MySQL mendukung interrupt live melalui koneksi terpisah dan `KILL QUERY`; SQLite berbasis
   `better-sqlite3` tetap sinkron dan mengembalikan `false` karena tidak dapat diinterupsi oleh request
@@ -137,6 +139,9 @@ dikirim ke client.
   display name, bukan file baru.
 - SQLite tidak memiliki `TRUNCATE`, create/drop database, atau metadata engine/collation setara
   MySQL; implementasi mempertahankan respons kompatibel atau fallback yang disengaja.
+- SQLite memerlukan rebuild tabel transaksional untuk memodifikasi definisi kolom atau menambah dan
+  menghapus foreign key; proses ini wajib mempertahankan data, index eksplisit/unique, dan trigger,
+  serta mengaktifkan kembali pemeriksaan foreign key setelah selesai.
 - Import MySQL memakai statement splitter yang memahami quote, comment, dan directive `DELIMITER`,
   lalu berhenti dengan nomor statement saat error. SQLite memakai parser script native di dalam
   transaksi agar trigger dan rollback tetap benar; script yang membawa transaksi eksplisit

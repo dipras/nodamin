@@ -2,35 +2,180 @@
 <div class="actions">
   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>" class="btn">← Data</a>
   <a href="/db/<%= encodeURIComponent(data.database) %>" class="btn">← Tables</a>
+  <% if (data.readOnly) { %><span class="badge">🔒 Read-only</span><% } %>
 </div>
-<div class="card" style="padding:0;overflow:hidden;">
-  <table>
-    <thead>
-      <tr>
-        <th>Column</th>
-        <th>Type</th>
-        <th>Nullable</th>
-        <th>Key</th>
-        <th>Default</th>
-        <th>Extra</th>
-      </tr>
-    </thead>
-    <tbody>
-      <% data.columns.forEach(function(c) { 
-        let keyBadge = '';
-        if (c.key === 'PRI') keyBadge = '<span class="badge badge-pri">PRI</span>';
-        else if (c.key === 'UNI') keyBadge = '<span class="badge badge-uni">UNI</span>';
-        else if (c.key === 'MUL') keyBadge = '<span class="badge badge-mul">MUL</span>';
-      %>
+<% if (data.error) { %><div class="msg msg-error"><%= data.error %></div><% } %>
+<% if (data.message) { %><div class="msg msg-success"><%= data.message %></div><% } %>
+
+<section class="schema-section">
+  <div class="schema-heading">
+    <div><h2>Columns</h2><p>Modify names, types, nullability, and defaults.</p></div>
+  </div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead>
         <tr>
-          <td><strong><%= c.name %></strong></td>
-          <td><code><%= c.type %></code></td>
-          <td><%= c.nullable ? 'Yes' : 'No' %></td>
-          <td><%- keyBadge %></td>
-          <td><% if (c.defaultValue === null) { %><span class="null">NULL</span><% } else { %><%= String(c.defaultValue) %><% } %></td>
-          <td><%= c.extra %></td>
+          <th>Column</th><th>Type</th><th>Nullable</th><th>Key</th><th>Default</th><th>Extra</th>
+          <% if (!data.readOnly) { %><th>Manage</th><% } %>
         </tr>
-      <% }); %>
-    </tbody>
-  </table>
-</div>
+      </thead>
+      <tbody>
+        <% data.columns.forEach(function(c) {
+          let keyBadge = '';
+          if (c.key === 'PRI') keyBadge = '<span class="badge badge-pri">PRI</span>';
+          else if (c.key === 'UNI') keyBadge = '<span class="badge badge-uni">UNI</span>';
+          else if (c.key === 'MUL') keyBadge = '<span class="badge badge-mul">MUL</span>';
+          const base = '/db/' + encodeURIComponent(data.database) + '/table/' + encodeURIComponent(data.table)
+            + '/columns/' + encodeURIComponent(c.name);
+        %>
+          <tr>
+            <td><strong><%= c.name %></strong></td>
+            <td><code><%= c.type %></code></td>
+            <td><%= c.nullable ? 'Yes' : 'No' %></td>
+            <td><%- keyBadge %></td>
+            <td><% if (c.defaultValue === null) { %><span class="null">NULL</span><% } else { %><%= String(c.defaultValue) %><% } %></td>
+            <td><%= c.extra %></td>
+            <% if (!data.readOnly) { %>
+              <td>
+                <details class="schema-menu">
+                  <summary class="btn btn-sm">Edit</summary>
+                  <div class="schema-popover">
+                    <form method="POST" action="<%= base %>/modify">
+                      <input type="hidden" name="name" value="<%= c.name %>">
+                      <label>Type<input name="type" value="<%= c.type %>" required></label>
+                      <label>Default<input name="defaultValue" value="<%= c.defaultValue === null ? '' : String(c.defaultValue) %>" placeholder="NULL, 0, 'text'"></label>
+                      <label class="check-label"><input type="checkbox" name="nullable" value="1" <%= c.nullable ? 'checked' : '' %>> Nullable</label>
+                      <button class="btn btn-primary btn-sm" type="submit">Save definition</button>
+                    </form>
+                    <form method="POST" action="<%= base %>/rename">
+                      <label>New name<input name="newName" value="<%= c.name %>" required></label>
+                      <button class="btn btn-sm" type="submit">Rename</button>
+                    </form>
+                    <button class="btn btn-danger btn-sm destructive-action" type="button"
+                      data-action="Drop column <%= c.name %>" data-confirmation="<%= c.name %>"
+                      data-url="<%= base %>/drop">Drop column</button>
+                  </div>
+                </details>
+              </td>
+            <% } %>
+          </tr>
+        <% }); %>
+      </tbody>
+    </table>
+  </div>
+  <% if (!data.readOnly) { %>
+    <details class="card schema-create">
+      <summary>Add column</summary>
+      <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/columns/add" class="schema-form-grid">
+        <label>Name<input name="name" required></label>
+        <label>Type<input name="type" value="TEXT" required></label>
+        <label>Default<input name="defaultValue" placeholder="NULL, 0, 'text'"></label>
+        <label class="check-label"><input type="checkbox" name="nullable" value="1" checked> Nullable</label>
+        <button class="btn btn-primary" type="submit">Add column</button>
+      </form>
+    </details>
+  <% } %>
+</section>
+
+<section class="schema-section">
+  <div class="schema-heading"><div><h2>Indexes</h2><p>Primary, unique, and regular indexes.</p></div></div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead><tr><th>Name</th><th>Columns</th><th>Kind</th><% if (!data.readOnly) { %><th>Manage</th><% } %></tr></thead>
+      <tbody>
+        <% data.indexes.forEach(function(index) { %>
+          <tr>
+            <td><strong><%= index.name %></strong></td>
+            <td><code><%= index.columns.join(', ') %></code></td>
+            <td><%= index.primary ? 'Primary' : index.unique ? 'Unique' : 'Index' %></td>
+            <% if (!data.readOnly) { %><td>
+              <% if (!index.primary && !index.name.startsWith('sqlite_autoindex_')) { %>
+                <button class="btn btn-danger btn-sm destructive-action" type="button"
+                  data-action="Drop index <%= index.name %>" data-confirmation="<%= index.name %>"
+                  data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/indexes/<%= encodeURIComponent(index.name) %>/drop">Drop</button>
+              <% } %>
+            </td><% } %>
+          </tr>
+        <% }); %>
+        <% if (data.indexes.length === 0) { %><tr><td colspan="4" class="empty">No indexes</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <% if (!data.readOnly) { %>
+    <details class="card schema-create">
+      <summary>Create index</summary>
+      <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/indexes/create" class="schema-form-grid">
+        <label>Name<input name="name" required></label>
+        <fieldset><legend>Columns</legend>
+          <% data.columns.forEach(function(column) { %>
+            <label class="check-label"><input type="checkbox" name="columns[]" value="<%= column.name %>"> <%= column.name %></label>
+          <% }); %>
+        </fieldset>
+        <label class="check-label"><input type="checkbox" name="unique" value="1"> Unique constraint</label>
+        <button class="btn btn-primary" type="submit">Create index</button>
+      </form>
+    </details>
+  <% } %>
+</section>
+
+<section class="schema-section">
+  <div class="schema-heading"><div><h2>Foreign keys</h2><p>Relationships and referential actions.</p></div></div>
+  <div class="card" style="padding:0;overflow:hidden;">
+    <table>
+      <thead><tr><th>Name</th><th>Columns</th><th>References</th><th>On update</th><th>On delete</th><% if (!data.readOnly) { %><th>Manage</th><% } %></tr></thead>
+      <tbody>
+        <% data.foreignKeys.forEach(function(foreignKey) { %>
+          <tr>
+            <td><strong><%= foreignKey.name %></strong></td>
+            <td><code><%= foreignKey.columns.join(', ') %></code></td>
+            <td><code><%= foreignKey.referencedTable %>(<%= foreignKey.referencedColumns.join(', ') %>)</code></td>
+            <td><%= foreignKey.onUpdate %></td><td><%= foreignKey.onDelete %></td>
+            <% if (!data.readOnly) { %><td>
+              <button class="btn btn-danger btn-sm destructive-action" type="button"
+                data-action="Drop foreign key <%= foreignKey.name %>" data-confirmation="<%= foreignKey.name %>"
+                data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/foreign-keys/<%= encodeURIComponent(foreignKey.name) %>/drop">Drop</button>
+            </td><% } %>
+          </tr>
+        <% }); %>
+        <% if (data.foreignKeys.length === 0) { %><tr><td colspan="6" class="empty">No foreign keys</td></tr><% } %>
+      </tbody>
+    </table>
+  </div>
+  <% if (!data.readOnly) { %>
+    <details class="card schema-create">
+      <summary>Create foreign key</summary>
+      <form method="POST" action="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(data.table) %>/foreign-keys/create" class="schema-form-grid" id="foreignKeyForm">
+        <label>Name<input name="name" required></label>
+        <label>Column<select name="column" required><% data.columns.forEach(function(column) { %><option><%= column.name %></option><% }); %></select></label>
+        <label>Referenced table<select name="referencedTable" id="referencedTable" required>
+          <% data.references.forEach(function(reference) { %><option value="<%= reference.name %>"><%= reference.name %></option><% }); %>
+        </select></label>
+        <label>Referenced column<select name="referencedColumn" id="referencedColumn" required></select></label>
+        <label>On update<select name="onUpdate"><% ['NO ACTION','RESTRICT','CASCADE','SET NULL','SET DEFAULT'].forEach(function(action) { %><option><%= action %></option><% }); %></select></label>
+        <label>On delete<select name="onDelete"><% ['NO ACTION','RESTRICT','CASCADE','SET NULL','SET DEFAULT'].forEach(function(action) { %><option><%= action %></option><% }); %></select></label>
+        <button class="btn btn-primary" type="submit">Create foreign key</button>
+      </form>
+    </details>
+  <% } %>
+</section>
+
+<script id="schemaReferences" type="application/json"><%- JSON.stringify(data.references).replace(/</g, '\\u003c') %></script>
+<script>
+(() => {
+  const table = document.getElementById('referencedTable');
+  const column = document.getElementById('referencedColumn');
+  if (!table || !column) return;
+  const references = JSON.parse(document.getElementById('schemaReferences').textContent);
+  function refreshColumns() {
+    const reference = references.find(item => item.name === table.value);
+    column.replaceChildren(...(reference?.columns || []).map(name => {
+      const option = document.createElement('option');
+      option.value = name;
+      option.textContent = name;
+      return option;
+    }));
+  }
+  table.addEventListener('change', refreshColumns);
+  refreshColumns();
+})();
+</script>

@@ -7,6 +7,9 @@ import type {
     QueryExecutionOptions,
     QueryResult,
     ColumnInfo,
+    ColumnDefinition,
+    ForeignKeyInfo,
+    IndexInfo,
     TableInfo,
 } from "../types.js";
 
@@ -20,6 +23,16 @@ export interface DatabaseDriver {
     listDatabases(): Promise<string[]>;
     listTables(): Promise<TableInfo[]>;
     getTableStructure(table: string): Promise<ColumnInfo[]>;
+    addColumn(table: string, column: ColumnDefinition): Promise<QueryResult>;
+    modifyColumn(table: string, column: string, definition: ColumnDefinition): Promise<QueryResult>;
+    renameColumn(table: string, column: string, newName: string): Promise<QueryResult>;
+    dropColumn(table: string, column: string): Promise<QueryResult>;
+    listIndexes(table: string): Promise<IndexInfo[]>;
+    createIndex(table: string, name: string, columns: string[], unique: boolean): Promise<QueryResult>;
+    dropIndex(table: string, name: string): Promise<QueryResult>;
+    listForeignKeys(table: string): Promise<ForeignKeyInfo[]>;
+    createForeignKey(table: string, foreignKey: ForeignKeyInfo): Promise<QueryResult>;
+    dropForeignKey(table: string, name: string): Promise<QueryResult>;
     getTableData(
         table: string,
         page?: number,

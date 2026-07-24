@@ -10,6 +10,9 @@ import type {
     QueryExecutionOptions,
     QueryResult,
     ColumnInfo,
+    ColumnDefinition,
+    ForeignKeyInfo,
+    IndexInfo,
     TableInfo,
 } from "../types.js";
 import { MySQLDriver } from "./mysql.js";
@@ -125,6 +128,85 @@ export async function listTables(sessionId: string): Promise<TableInfo[]> {
 
 export async function getTableStructure(sessionId: string, table: string): Promise<ColumnInfo[]> {
     return requireDriver(sessionId).getTableStructure(table);
+}
+
+export async function addColumn(
+    sessionId: string,
+    table: string,
+    column: ColumnDefinition
+): Promise<QueryResult> {
+    return requireDriver(sessionId).addColumn(table, column);
+}
+
+export async function modifyColumn(
+    sessionId: string,
+    table: string,
+    column: string,
+    definition: ColumnDefinition
+): Promise<QueryResult> {
+    return requireDriver(sessionId).modifyColumn(table, column, definition);
+}
+
+export async function renameColumn(
+    sessionId: string,
+    table: string,
+    column: string,
+    newName: string
+): Promise<QueryResult> {
+    return requireDriver(sessionId).renameColumn(table, column, newName);
+}
+
+export async function dropColumn(
+    sessionId: string,
+    table: string,
+    column: string
+): Promise<QueryResult> {
+    return requireDriver(sessionId).dropColumn(table, column);
+}
+
+export async function listIndexes(sessionId: string, table: string): Promise<IndexInfo[]> {
+    return requireDriver(sessionId).listIndexes(table);
+}
+
+export async function createIndex(
+    sessionId: string,
+    table: string,
+    name: string,
+    columns: string[],
+    unique: boolean
+): Promise<QueryResult> {
+    return requireDriver(sessionId).createIndex(table, name, columns, unique);
+}
+
+export async function dropIndex(
+    sessionId: string,
+    table: string,
+    name: string
+): Promise<QueryResult> {
+    return requireDriver(sessionId).dropIndex(table, name);
+}
+
+export async function listForeignKeys(
+    sessionId: string,
+    table: string
+): Promise<ForeignKeyInfo[]> {
+    return requireDriver(sessionId).listForeignKeys(table);
+}
+
+export async function createForeignKey(
+    sessionId: string,
+    table: string,
+    foreignKey: ForeignKeyInfo
+): Promise<QueryResult> {
+    return requireDriver(sessionId).createForeignKey(table, foreignKey);
+}
+
+export async function dropForeignKey(
+    sessionId: string,
+    table: string,
+    name: string
+): Promise<QueryResult> {
+    return requireDriver(sessionId).dropForeignKey(table, name);
 }
 
 export async function getTableData(

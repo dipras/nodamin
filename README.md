@@ -171,9 +171,9 @@ database engines.
 
 ### 3. Schema Management
 
-- [ ] Alter tables from the UI: add, modify, rename, and drop columns
-- [ ] Create, inspect, and drop indexes and unique constraints
-- [ ] Inspect and manage foreign keys
+- [x] Alter tables from the UI: add, modify, rename, and drop columns
+- [x] Create, inspect, and drop indexes and unique constraints
+- [x] Inspect and manage foreign keys
 - [ ] Add an ERD viewer based on foreign-key relationships
 - [ ] Browse and manage views
 - [ ] Browse triggers, stored procedures, and functions where supported

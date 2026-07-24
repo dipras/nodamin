@@ -4,7 +4,14 @@
 
 import * as compiled from "./compiled.js";
 import { CSS, JS } from "./assets.js";
-import type { ColumnInfo, DbConnection, QueryResult, TableInfo } from "../types.js";
+import type {
+  ColumnInfo,
+  DbConnection,
+  ForeignKeyInfo,
+  IndexInfo,
+  QueryResult,
+  TableInfo,
+} from "../types.js";
 
 // Wrapper to call EJS compiled functions (they expect 4 params: data, escapeFn, include, rethrow)
 type CompiledTemplate = (
@@ -137,6 +144,12 @@ interface TableStructurePageProps {
   table: string;
   columns: ColumnInfo[];
   tables: SidebarTable[];
+  indexes?: IndexInfo[];
+  foreignKeys?: ForeignKeyInfo[];
+  references?: { name: string; columns: string[] }[];
+  readOnly?: boolean;
+  error?: string;
+  message?: string;
 }
 
 interface InsertPageProps extends TableStructurePageProps {
@@ -232,8 +245,24 @@ export function tableStructurePage({
   table,
   columns,
   tables,
+  indexes = [],
+  foreignKeys = [],
+  references = [],
+  readOnly = false,
+  error,
+  message,
 }: TableStructurePageProps): string {
-  const content = render(compiled.tableStructure, { database, table, columns });
+  const content = render(compiled.tableStructure, {
+    database,
+    table,
+    columns,
+    indexes,
+    foreignKeys,
+    references,
+    readOnly,
+    error,
+    message,
+  });
   return layout(
     `Structure: ${table}`,
     content,

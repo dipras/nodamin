@@ -194,6 +194,112 @@ body {
   margin-left: auto;
 }
 
+.schema-section {
+  margin-top: 28px;
+}
+
+.schema-section > .card {
+  overflow: visible !important;
+}
+
+.schema-section td:last-child {
+  overflow: visible;
+}
+
+.schema-heading {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+.schema-heading h2 {
+  margin-bottom: 3px;
+}
+
+.schema-heading p {
+  color: var(--text2);
+  font-size: 13px;
+}
+
+.schema-create summary,
+.schema-menu summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.schema-create summary {
+  color: var(--primary);
+}
+
+.schema-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 12px;
+  align-items: end;
+  margin-top: 16px;
+}
+
+.schema-form-grid label,
+.schema-popover label {
+  display: grid;
+  gap: 5px;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.schema-form-grid fieldset {
+  padding: 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.schema-form-grid legend {
+  padding: 0 4px;
+  color: var(--text2);
+  font-size: 12px;
+}
+
+.schema-form-grid .check-label,
+.schema-popover .check-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.schema-form-grid .check-label input,
+.schema-popover .check-label input {
+  width: auto;
+}
+
+.schema-menu {
+  position: relative;
+}
+
+.schema-menu summary {
+  list-style: none;
+}
+
+.schema-popover {
+  position: absolute;
+  z-index: 15;
+  right: 0;
+  width: 310px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-md);
+}
+
+.schema-popover form {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
 a {
   color: var(--primary);
   text-decoration: none;

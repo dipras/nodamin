@@ -4,23 +4,12 @@ import { get, sendHtml } from "../router.js";
 import type { RouteContext } from "../types.js";
 import * as views from "../views/pages.js";
 import { requireConnection } from "./shared.js";
+import { renderStructure } from "./schema-management.js";
 
 export function registerTableBrowseRoutes(): void {
   get("/db/:db/table/:table/structure", async (ctx: RouteContext, res: ServerResponse) => {
     if (!requireConnection(ctx, res)) return;
-    const dbName = ctx.params["db"]!;
-    const table = ctx.params["table"]!;
-    db.setCurrentDatabase(ctx.sessionId!, dbName);
-    const [columns, tables] = await Promise.all([
-      db.getTableStructure(ctx.sessionId!, table),
-      db.listTables(ctx.sessionId!)
-    ]);
-    sendHtml(res, 200, views.tableStructurePage({
-      database: dbName,
-      table,
-      columns,
-      tables,
-    }));
+    await renderStructure(ctx, res);
   });
 
   // Keep this generic route last within the table domain.

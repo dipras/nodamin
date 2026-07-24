@@ -5,18 +5,30 @@
 import Database from "better-sqlite3";
 import path from "node:path";
 import { unlinkSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import type { DatabaseDriver } from "./driver.js";
 import type {
     DbConnection,
     QueryExecutionOptions,
     QueryResult,
     ColumnInfo,
+    ColumnDefinition,
+    ForeignKeyInfo,
+    IndexInfo,
     TableInfo,
 } from "../types.js";
 import { assertSqlReadOnly, assertWritable } from "./sql.js";
 
 export function quoteSQLiteIdentifier(identifier: string): string {
     return `"${identifier.replace(/"/g, '""')}"`;
+}
+
+interface SQLiteColumn {
+    name: string;
+    type: string;
+    notnull: number;
+    dflt_value: string | null;
+    pk: number;
 }
 
 export class SQLiteDriver implements DatabaseDriver {
@@ -34,6 +46,7 @@ export class SQLiteDriver implements DatabaseDriver {
             ? { readonly: true, fileMustExist: true }
             : undefined;
         this.db = new Database(filePath, options);
+        this.db.pragma("foreign_keys = ON");
         if (!conn.readOnly) this.db.pragma("journal_mode = WAL");
         this.currentConnection = conn;
         this.dbName = path.basename(filePath, path.extname(filePath));
@@ -143,6 +156,236 @@ export class SQLiteDriver implements DatabaseDriver {
             defaultValue: r.dflt_value,
             extra: this.isAutoIncrement(table, r.name, r.pk) ? "auto_increment" : "",
         }));
+    }
+
+    async addColumn(table: string, column: ColumnDefinition): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        this.getDb().exec(
+            `ALTER TABLE ${quoteSQLiteIdentifier(table)} ADD COLUMN ${sqliteColumnDefinition(column)}`
+        );
+        return schemaResult(`Added column ${column.name}`);
+    }
+
+    async modifyColumn(
+        table: string,
+        column: string,
+        definition: ColumnDefinition
+    ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        const currentColumns = this.sqliteColumns(table);
+        if (!currentColumns.some(({ name }) => name === column)) {
+            throw new Error(`Column "${column}" does not exist`);
+        }
+        const columns = currentColumns.map((current) =>
+            current.name === column
+                ? {
+                    ...current,
+                    name: definition.name,
+                    type: validatedSQLiteType(definition.type),
+                    notnull: definition.nullable ? 0 : 1,
+                    dflt_value: definition.defaultValue?.trim()
+                        ? validatedSQLiteDefault(definition.defaultValue)
+                        : null,
+                }
+                : current
+        );
+        this.rebuildTable(table, columns, await this.listForeignKeys(table));
+        return schemaResult(`Modified column ${column}`);
+    }
+
+    async renameColumn(table: string, column: string, newName: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        this.getDb().exec(
+            `ALTER TABLE ${quoteSQLiteIdentifier(table)} RENAME COLUMN ${quoteSQLiteIdentifier(column)} TO ${quoteSQLiteIdentifier(newName)}`
+        );
+        return schemaResult(`Renamed column ${column} to ${newName}`);
+    }
+
+    async dropColumn(table: string, column: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        this.getDb().exec(
+            `ALTER TABLE ${quoteSQLiteIdentifier(table)} DROP COLUMN ${quoteSQLiteIdentifier(column)}`
+        );
+        return schemaResult(`Dropped column ${column}`);
+    }
+
+    async listIndexes(table: string): Promise<IndexInfo[]> {
+        const db = this.getDb();
+        const rows = db.prepare(`PRAGMA index_list(${quoteSQLiteIdentifier(table)})`).all() as {
+            name: string;
+            unique: number;
+            origin: string;
+        }[];
+        return rows.map((row) => ({
+            name: row.name,
+            unique: row.unique === 1,
+            columns: (db.prepare(`PRAGMA index_info(${quoteSQLiteIdentifier(row.name)})`).all() as {
+                name: string;
+            }[]).map(({ name }) => name),
+            primary: row.origin === "pk",
+        }));
+    }
+
+    async createIndex(
+        table: string,
+        name: string,
+        columns: string[],
+        unique: boolean
+    ): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        if (columns.length === 0) throw new Error("Choose at least one index column");
+        this.getDb().exec(
+            `CREATE ${unique ? "UNIQUE " : ""}INDEX ${quoteSQLiteIdentifier(name)} ON ${quoteSQLiteIdentifier(table)} (${columns.map(quoteSQLiteIdentifier).join(", ")})`
+        );
+        return schemaResult(`Created index ${name}`);
+    }
+
+    async dropIndex(_table: string, name: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        if (name.startsWith("sqlite_autoindex_")) {
+            throw new Error("Implicit primary/unique indexes cannot be dropped directly");
+        }
+        this.getDb().exec(`DROP INDEX ${quoteSQLiteIdentifier(name)}`);
+        return schemaResult(`Dropped index ${name}`);
+    }
+
+    async listForeignKeys(table: string): Promise<ForeignKeyInfo[]> {
+        const rows = this.getDb()
+            .prepare(`PRAGMA foreign_key_list(${quoteSQLiteIdentifier(table)})`)
+            .all() as {
+                id: number;
+                seq: number;
+                table: string;
+                from: string;
+                to: string;
+                on_update: string;
+                on_delete: string;
+            }[];
+        const foreignKeys = new Map<number, ForeignKeyInfo>();
+        for (const row of rows) {
+            const current = foreignKeys.get(row.id) ?? {
+                name: `fk_${row.id}`,
+                columns: [],
+                referencedTable: row.table,
+                referencedColumns: [],
+                onUpdate: row.on_update,
+                onDelete: row.on_delete,
+            };
+            current.columns.push(row.from);
+            current.referencedColumns.push(row.to);
+            foreignKeys.set(row.id, current);
+        }
+        return [...foreignKeys.values()];
+    }
+
+    async createForeignKey(table: string, foreignKey: ForeignKeyInfo): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        validateSQLiteForeignKey(foreignKey);
+        const foreignKeys = await this.listForeignKeys(table);
+        foreignKeys.push(foreignKey);
+        this.rebuildTable(table, this.sqliteColumns(table), foreignKeys);
+        return schemaResult(`Created foreign key ${foreignKey.name}`);
+    }
+
+    async dropForeignKey(table: string, name: string): Promise<QueryResult> {
+        assertWritable(this.currentConnection?.readOnly);
+        const currentForeignKeys = await this.listForeignKeys(table);
+        const foreignKeys = currentForeignKeys.filter((foreignKey) => foreignKey.name !== name);
+        if (foreignKeys.length === currentForeignKeys.length) {
+            throw new Error(`Foreign key "${name}" does not exist`);
+        }
+        this.rebuildTable(table, this.sqliteColumns(table), foreignKeys);
+        return schemaResult(`Dropped foreign key ${name}`);
+    }
+
+    private sqliteColumns(table: string): SQLiteColumn[] {
+        return this.getDb()
+            .prepare(`PRAGMA table_info(${quoteSQLiteIdentifier(table)})`)
+            .all() as SQLiteColumn[];
+    }
+
+    private rebuildTable(
+        table: string,
+        columns: SQLiteColumn[],
+        foreignKeys: ForeignKeyInfo[]
+    ): void {
+        if (columns.length === 0) throw new Error("A table must keep at least one column");
+        const db = this.getDb();
+        const indexes = db.prepare(
+            "SELECT name, sql FROM sqlite_master WHERE type='index' AND tbl_name=?"
+        ).all(table) as { name: string; sql: string | null }[];
+        const indexMetadata = new Map(
+            (db.prepare(`PRAGMA index_list(${quoteSQLiteIdentifier(table)})`).all() as {
+                name: string;
+                unique: number;
+                origin: string;
+            }[]).map((index) => [index.name, index])
+        );
+        const indexColumns = new Map(indexes.map((index) => [
+            index.name,
+            (db.prepare(`PRAGMA index_info(${quoteSQLiteIdentifier(index.name)})`).all() as {
+                name: string;
+            }[]).map(({ name }) => name),
+        ]));
+        const triggers = db.prepare(
+            "SELECT sql FROM sqlite_master WHERE type='trigger' AND tbl_name=? AND sql IS NOT NULL"
+        ).all(table) as { sql: string }[];
+        const temporaryTable = `__nodamin_${randomUUID().replaceAll("-", "")}`;
+        const primaryColumns = columns
+            .filter(({ pk }) => pk > 0)
+            .sort((left, right) => left.pk - right.pk);
+        const definitions = columns.map((column) => {
+            let definition = `${quoteSQLiteIdentifier(column.name)} ${validatedSQLiteType(column.type)}`;
+            if (column.notnull) definition += " NOT NULL";
+            if (column.dflt_value !== null) definition += ` DEFAULT ${column.dflt_value}`;
+            return definition;
+        });
+        if (primaryColumns.length > 0) {
+            definitions.push(
+                `PRIMARY KEY (${primaryColumns.map(({ name }) => quoteSQLiteIdentifier(name)).join(", ")})`
+            );
+        }
+        for (const foreignKey of foreignKeys) {
+            validateSQLiteForeignKey(foreignKey);
+            definitions.push(
+                `CONSTRAINT ${quoteSQLiteIdentifier(foreignKey.name)} FOREIGN KEY (${foreignKey.columns.map(quoteSQLiteIdentifier).join(", ")}) REFERENCES ${quoteSQLiteIdentifier(foreignKey.referencedTable)} (${foreignKey.referencedColumns.map(quoteSQLiteIdentifier).join(", ")}) ON UPDATE ${sqliteForeignAction(foreignKey.onUpdate)} ON DELETE ${sqliteForeignAction(foreignKey.onDelete)}`
+            );
+        }
+        const columnList = columns.map(({ name }) => quoteSQLiteIdentifier(name)).join(", ");
+
+        db.pragma("foreign_keys = OFF");
+        try {
+            db.transaction(() => {
+                db.exec(
+                    `CREATE TABLE ${quoteSQLiteIdentifier(temporaryTable)} (${definitions.join(", ")})`
+                );
+                db.exec(
+                    `INSERT INTO ${quoteSQLiteIdentifier(temporaryTable)} (${columnList}) SELECT ${columnList} FROM ${quoteSQLiteIdentifier(table)}`
+                );
+                db.exec(`DROP TABLE ${quoteSQLiteIdentifier(table)}`);
+                db.exec(
+                    `ALTER TABLE ${quoteSQLiteIdentifier(temporaryTable)} RENAME TO ${quoteSQLiteIdentifier(table)}`
+                );
+                for (const index of indexes) {
+                    if (index.sql) {
+                        db.exec(index.sql);
+                        continue;
+                    }
+                    const metadata = indexMetadata.get(index.name);
+                    if (!metadata || metadata.origin !== "u") continue;
+                    const columnsToRestore = indexColumns.get(index.name) ?? [];
+                    if (columnsToRestore.length > 0) {
+                        const restoredName = `nodamin_unique_${randomUUID().slice(0, 8)}`;
+                        db.exec(
+                            `CREATE UNIQUE INDEX ${quoteSQLiteIdentifier(restoredName)} ON ${quoteSQLiteIdentifier(table)} (${columnsToRestore.map(quoteSQLiteIdentifier).join(", ")})`
+                        );
+                    }
+                }
+                for (const trigger of triggers) db.exec(trigger.sql);
+            })();
+        } finally {
+            db.pragma("foreign_keys = ON");
+        }
     }
 
     private isAutoIncrement(table: string, _column: string, pk: number): boolean {
@@ -481,4 +724,48 @@ export class SQLiteDriver implements DatabaseDriver {
 
 function hasExplicitTransaction(sql: string): boolean {
     return /^\s*BEGIN(?:\s+(?:DEFERRED|IMMEDIATE|EXCLUSIVE))?(?:\s+TRANSACTION)?\s*;/im.test(sql);
+}
+
+function validatedSQLiteType(type: string): string {
+    const normalized = type.trim();
+    if (!/^[a-zA-Z][a-zA-Z0-9_ ]*(?:\(\s*\d+(?:\s*,\s*\d+)?\s*\))?$/.test(normalized)) {
+        throw new Error("Invalid column type");
+    }
+    return normalized;
+}
+
+function sqliteColumnDefinition(column: ColumnDefinition): string {
+    let sql = `${quoteSQLiteIdentifier(column.name)} ${validatedSQLiteType(column.type)}`;
+    if (!column.nullable) sql += " NOT NULL";
+    if (column.defaultValue?.trim()) sql += ` DEFAULT ${validatedSQLiteDefault(column.defaultValue)}`;
+    return sql;
+}
+
+function validatedSQLiteDefault(value: string): string {
+    const normalized = value.trim();
+    if (!/^(?:NULL|[-+]?\d+(?:\.\d+)?|'(?:''|[^'])*'|"(?:[^"]|"")*"|CURRENT_(?:TIME|DATE|TIMESTAMP))$/i.test(normalized)) {
+        throw new Error("Invalid default value");
+    }
+    return normalized;
+}
+
+function sqliteForeignAction(action: string): string {
+    const normalized = action.trim().toUpperCase();
+    if (!["NO ACTION", "RESTRICT", "CASCADE", "SET NULL", "SET DEFAULT"].includes(normalized)) {
+        throw new Error("Invalid foreign-key action");
+    }
+    return normalized;
+}
+
+function validateSQLiteForeignKey(foreignKey: ForeignKeyInfo): void {
+    if (
+        foreignKey.columns.length === 0
+        || foreignKey.columns.length !== foreignKey.referencedColumns.length
+    ) {
+        throw new Error("Foreign-key columns must have matching referenced columns");
+    }
+}
+
+function schemaResult(message: string): QueryResult {
+    return { fields: [], rows: [], message };
 }

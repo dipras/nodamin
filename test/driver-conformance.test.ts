@@ -15,6 +15,9 @@ interface ConformanceTarget {
 async function assertDriverConformance(target: ConformanceTarget): Promise<void> {
   const { driver, connection, database } = target;
   const table = `nodamin_conformance_${randomUUID().replaceAll("-", "")}`;
+  const parentTable = `${table.slice(0, 52)}_parent`;
+  const indexName = `${table.slice(0, 54)}_idx`;
+  const foreignKeyName = `${table.slice(0, 53)}_fk`;
   driver.connect(connection);
   if (database) driver.setCurrentDatabase(database);
 
@@ -50,6 +53,50 @@ async function assertDriverConformance(target: ConformanceTarget): Promise<void>
 
     await driver.updateRow(table, { label: "updated" }, { id });
     assert.equal((await driver.getRow(table, { id }))?.["label"], "updated");
+
+    await driver.addColumn(table, {
+      name: "notes",
+      type: "TEXT",
+      nullable: true,
+    });
+    await driver.modifyColumn(table, "notes", {
+      name: "notes",
+      type: "VARCHAR(255)",
+      nullable: true,
+    });
+    await driver.renameColumn(table, "notes", "description");
+    assert.ok((await driver.getTableStructure(table)).some(({ name }) => name === "description"));
+
+    await driver.createIndex(table, indexName, ["label"], true);
+    assert.ok((await driver.listIndexes(table)).some(({ name }) => name === indexName));
+    await driver.dropIndex(table, indexName);
+
+    await driver.createTable(parentTable, [{
+      name: "id",
+      type: "INTEGER",
+      nullable: false,
+      primary: true,
+      autoIncrement: true,
+    }]);
+    await driver.addColumn(table, {
+      name: "parent_id",
+      type: "INTEGER",
+      nullable: true,
+    });
+    await driver.createForeignKey(table, {
+      name: foreignKeyName,
+      columns: ["parent_id"],
+      referencedTable: parentTable,
+      referencedColumns: ["id"],
+      onUpdate: "CASCADE",
+      onDelete: "SET NULL",
+    });
+    const listedForeignKey = (await driver.listForeignKeys(table))[0];
+    assert.equal(listedForeignKey?.referencedTable, parentTable);
+    await driver.dropForeignKey(table, listedForeignKey!.name);
+    await driver.dropColumn(table, "parent_id");
+    await driver.dropColumn(table, "description");
+
     assert.match(await driver.exportTable(table), /CREATE TABLE/i);
 
     await driver.deleteRow(table, { id });
@@ -58,6 +105,9 @@ async function assertDriverConformance(target: ConformanceTarget): Promise<void>
     try {
       await driver.dropTable(table);
     } finally {
+      try {
+        await driver.dropTable(parentTable);
+      } catch { }
       driver.disconnect();
     }
   }

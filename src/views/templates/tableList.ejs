@@ -36,8 +36,8 @@
             <th style="width: 40px;"><input type="checkbox" id="selectAll" onchange="toggleAll(this)" style="width: auto; height: 18px;" /></th>
             <th>Table</th>
             <th>Engine</th>
-            <th>Rows</th>
-            <th>Size</th>
+            <th class="align-right">Rows</th>
+            <th class="align-right">Size</th>
             <th>Collation</th>
             <th>Actions</th>
           </tr>
@@ -48,20 +48,28 @@
               <td><input type="checkbox" name="tables[]" value="<%= t.name %>" onchange="updateCount()" class="table-check" style="width: auto; height: 18px;" /></td>
               <td><a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>"><%= t.name %></a></td>
               <td><%= t.engine %></td>
-              <td><%= t.rows.toLocaleString() %></td>
-              <td><%= t.size %></td>
-              <td><code><%= t.collation %></code></td>
+              <td class="table-number"><%= t.rows.toLocaleString() %></td>
+              <td class="table-size"><%= t.size %></td>
               <td>
-                <div style="display:flex;gap:4px;">
+                <code class="collation-value" title="<%= t.collation %>"><%= t.collation %></code>
+              </td>
+              <td>
+                <div class="table-row-actions">
+                  <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>" class="btn btn-sm btn-primary">Browse</a>
                   <a href="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/structure" class="btn btn-sm">Structure</a>
+                  <a href="/db/<%= encodeURIComponent(data.database) %>/sql" class="btn btn-sm">SQL</a>
                   <% if (!data.readOnly) { %>
-                    <button type="button" class="btn btn-sm btn-danger destructive-action"
-                      data-action="Drop table" data-confirmation="<%= t.name %>"
-                      data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop">Drop</button>
-                    <button type="button" class="btn btn-sm destructive-action"
-                      data-action="Truncate table" data-confirmation="<%= t.name %>"
-                      data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate"
-                      style="color:var(--warning);">Truncate</button>
+                    <details class="action-menu table-action-menu">
+                      <summary aria-label="Destructive actions for <%= t.name %>" title="More actions">•••</summary>
+                      <div class="action-menu-popover">
+                        <button type="button" class="menu-warning destructive-action"
+                          data-action="Truncate table" data-confirmation="<%= t.name %>"
+                          data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/truncate">Truncate table</button>
+                        <button type="button" class="menu-danger destructive-action"
+                          data-action="Drop table" data-confirmation="<%= t.name %>"
+                          data-url="/db/<%= encodeURIComponent(data.database) %>/table/<%= encodeURIComponent(t.name) %>/drop">Drop table</button>
+                      </div>
+                    </details>
                   <% } %>
                 </div>
               </td>

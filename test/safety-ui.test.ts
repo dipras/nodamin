@@ -26,10 +26,13 @@ test("read-only database pages hide mutation controls", () => {
     page: 1,
     perPage: 50,
     primaryKeys: ["id"],
+    tables: [{ name: "users" }],
     readOnly: true,
   });
   assert.match(tableHtml, /Read-only/);
   assert.doesNotMatch(tableHtml, /Insert Row|Delete row|>Edit</);
+  assert.match(tableHtml, /id="app-sidebar"/);
+  assert.match(tableHtml, /data-label="users"/);
 });
 
 test("MySQL SQL page exposes timeout and cancellation controls", () => {
@@ -42,4 +45,39 @@ test("MySQL SQL page exposes timeout and cancellation controls", () => {
   assert.match(html, /name="timeoutMs" value="12000"/);
   assert.match(html, /id="cancelQueryButton"/);
   assert.match(html, /\/db\/app\/query\/cancel/);
+  assert.match(html, /id="explainQueryButton"/);
+  assert.match(html, /Ctrl\/⌘ \+ Enter to execute/);
+  assert.match(html, /Recent Queries/);
+});
+
+test("layout renders a persistent sidebar toggle on contextual pages", () => {
+  const html = views.tableStructurePage({
+    database: "app",
+    table: "users",
+    columns: [],
+    tables: [{ name: "users" }, { name: "roles" }],
+  });
+  assert.match(html, /id="sidebar-toggle"/);
+  assert.match(html, /id="app-sidebar"/);
+  assert.match(html, /localStorage\.getItem\('nodamin-sidebar-collapsed'\)/);
+  assert.match(html, /data-label="users"[\s\S]*?class="active"/);
+});
+
+test("table list prioritizes safe actions and hides destructive actions in a menu", () => {
+  const html = views.tableListPage({
+    database: "app",
+    tables: [{
+      name: "users",
+      engine: "InnoDB",
+      rows: 1_500,
+      size: "64 KB",
+      collation: "utf8mb4_unicode_520_ci",
+    }],
+  });
+  assert.match(html, />Browse</);
+  assert.match(html, />Structure</);
+  assert.match(html, />SQL</);
+  assert.match(html, /class="action-menu table-action-menu"/);
+  assert.match(html, /class="table-number">1,500</);
+  assert.match(html, /title="utf8mb4_unicode_520_ci"/);
 });

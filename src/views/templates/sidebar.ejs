@@ -2,17 +2,30 @@
   <h3><%= data.title %></h3>
   <span><%= data.items.length %></span>
 </div>
-<label class="sidebar-search">
-  <span aria-hidden="true">⌕</span>
-  <span class="sr-only">Search <%= data.title.toLocaleLowerCase() %></span>
-  <input type="search" placeholder="Search <%= data.title.toLocaleLowerCase() %>…" data-sidebar-search autocomplete="off">
-</label>
+<% if (data.items.length > 4) { %>
+  <label class="sidebar-search">
+    <span aria-hidden="true">⌕</span>
+    <span class="sr-only">Search <%= data.title.toLocaleLowerCase() %></span>
+    <input type="search" placeholder="Search <%= data.title.toLocaleLowerCase() %>…" data-sidebar-search autocomplete="off">
+  </label>
+<% } %>
 <nav class="sidebar-list" aria-label="<%= data.title %>">
   <% data.items.forEach(function(item) { %>
-    <a href="<%= item.href %>" data-sidebar-item data-label="<%= item.name.toLocaleLowerCase() %>">
-      <span class="sidebar-item-icon" aria-hidden="true"><%= data.title === 'Databases' ? '◉' : '▦' %></span>
+    <a href="<%= item.href %>" data-sidebar-item data-label="<%= item.name.toLocaleLowerCase() %>"
+      class="<%= item.active ? 'active' : '' %>">
+      <span class="sidebar-item-icon" aria-hidden="true"><%= item.icon %></span>
       <span><%= item.name %></span>
     </a>
   <% }); %>
 </nav>
 <p class="sidebar-empty" data-sidebar-empty hidden>No matches found</p>
+<nav class="sidebar-footer" aria-label="Quick navigation">
+  <a href="/">
+    <span class="sidebar-item-icon" aria-hidden="true">⌂</span>
+    <span>Databases</span>
+  </a>
+  <a href="/sql">
+    <span class="sidebar-item-icon" aria-hidden="true">⌘</span>
+    <span>SQL Query</span>
+  </a>
+</nav>

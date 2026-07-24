@@ -184,9 +184,10 @@ async function renderTableError(
   const dbName = ctx.params["db"]!;
   const table = ctx.params["table"]!;
   const page = Number(ctx.query["page"]) || 1;
-  const [data, columns] = await Promise.all([
+  const [data, columns, tables] = await Promise.all([
     db.getTableData(ctx.sessionId!, table, page, 50),
     knownPrimaryKeys ? Promise.resolve([]) : db.getTableStructure(ctx.sessionId!, table),
+    db.listTables(ctx.sessionId!),
   ]);
   const primaryKeys = knownPrimaryKeys
     ?? columns.filter((column) => column.key === "PRI").map((column) => column.name);
@@ -199,6 +200,7 @@ async function renderTableError(
     page,
     perPage: 50,
     primaryKeys,
+    tables,
     readOnly: db.isReadOnly(ctx.sessionId),
     error: err instanceof Error ? err.message : String(err),
   }));

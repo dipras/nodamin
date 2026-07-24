@@ -3,19 +3,29 @@
   <a href="<%= data.database ? '/db/' + encodeURIComponent(data.database) : '/' %>" class="btn">← Back</a>
   <% if (data.readOnly) { %><span class="badge">🔒 Read-only</span><% } %>
 </div>
-<div class="card sql-editor">
-  <form id="sqlQueryForm" method="POST" action="<%= data.database ? '/db/' + encodeURIComponent(data.database) + '/sql' : '/sql' %>">
+<div class="sql-workspace">
+  <div class="card sql-editor">
+  <form id="sqlQueryForm" method="POST" action="<%= data.database ? '/db/' + encodeURIComponent(data.database) + '/sql' : '/sql' %>"
+    data-history-scope="<%= data.database || 'global' %>" data-explain-prefix="<%= data.explainPrefix %>">
     <div class="form-group">
-      <label>SQL Statement</label>
-      <textarea name="sql" style="width:100%;min-height:160px;" placeholder="SELECT * FROM ..."><%= data.sql || '' %></textarea>
+      <div class="sql-editor-label">
+        <label for="sql-input">SQL Statement</label>
+        <span>Ctrl/⌘ + Enter to execute</span>
+      </div>
+      <div class="sql-code-editor">
+        <pre id="sql-highlight" aria-hidden="true"><code></code></pre>
+        <textarea id="sql-input" name="sql" spellcheck="false" autocomplete="off"
+          aria-label="SQL statement" placeholder="SELECT * FROM ..."><%= data.sql || '' %></textarea>
+      </div>
     </div>
-    <div style="display:flex;gap:8px;align-items:end;flex-wrap:wrap;">
+    <div class="sql-toolbar">
       <div class="form-group" style="margin:0;">
         <label>Timeout (ms)</label>
         <input type="number" name="timeoutMs" value="<%= data.queryTimeoutMs %>" min="100"
           max="300000" step="100" style="width:130px">
       </div>
       <button id="executeQueryButton" type="submit" class="btn btn-primary">▶ Execute</button>
+      <button id="explainQueryButton" type="button" class="btn">Explain</button>
       <% if (data.canCancel) { %>
         <button id="cancelQueryButton" type="button" class="btn btn-danger" hidden>■ Cancel</button>
       <% } %>
@@ -27,6 +37,15 @@
       </small>
     <% } %>
   </form>
+  </div>
+  <aside class="card query-history" aria-labelledby="query-history-title">
+    <div class="query-history-heading">
+      <h2 id="query-history-title">Recent Queries</h2>
+      <button type="button" id="clearQueryHistory" class="text-button">Clear</button>
+    </div>
+    <div id="queryHistoryList"></div>
+    <p id="queryHistoryEmpty">Executed queries will appear here on this device.</p>
+  </aside>
 </div>
 <% if (data.result) { %>
   <% if (data.result.message) { 
@@ -59,7 +78,14 @@
         </table>
       </div>
     </div>
-    <div class="info" style="margin-top:8px;font-size:12px;color:var(--text2);"><%= data.result.rows.length %> row(s) returned</div>
+    <div class="query-result-meta">
+      <span>Returned <strong><%= data.result.rows.length.toLocaleString() %></strong> row<%= data.result.rows.length === 1 ? '' : 's' %></span>
+      <span>Execution <strong><%= data.executionTimeMs %> ms</strong></span>
+    </div>
+  <% } else if (data.executionTimeMs !== undefined) { %>
+    <div class="query-result-meta">
+      <span>Execution <strong><%= data.executionTimeMs %> ms</strong></span>
+    </div>
   <% } %>
 <% } %>
 
@@ -67,12 +93,106 @@
 (function () {
   const form = document.getElementById('sqlQueryForm');
   const executeButton = document.getElementById('executeQueryButton');
+  const explainButton = document.getElementById('explainQueryButton');
   const cancelButton = document.getElementById('cancelQueryButton');
   const status = document.getElementById('queryStatus');
+  const input = document.getElementById('sql-input');
+  const highlight = document.querySelector('#sql-highlight code');
+  const highlightLayer = document.getElementById('sql-highlight');
+  const historyList = document.getElementById('queryHistoryList');
+  const historyEmpty = document.getElementById('queryHistoryEmpty');
+  const clearHistory = document.getElementById('clearQueryHistory');
+  const historyKey = `nodamin-query-history:${form.dataset.historyScope}`;
   let queryId = null;
+
+  function escapeHtml(value) {
+    return value.replace(/[&<>]/g, character => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' })[character]);
+  }
+
+  function highlightSql(value) {
+    const tokenPattern = /(--[^\n]*|\/\*[\s\S]*?\*\/)|('(?:''|[^'])*'|"(?:[^"]|"")*")|\b(SELECT|FROM|WHERE|JOIN|LEFT|RIGHT|INNER|OUTER|ON|AS|INSERT|INTO|VALUES|UPDATE|SET|DELETE|CREATE|ALTER|DROP|TABLE|DATABASE|INDEX|VIEW|WITH|GROUP|BY|ORDER|HAVING|LIMIT|OFFSET|UNION|ALL|DISTINCT|EXPLAIN|PRAGMA|SHOW|DESCRIBE|AND|OR|NOT|NULL|IS|IN|LIKE|ASC|DESC)\b|\b(\d+(?:\.\d+)?)\b/gi;
+    let output = '';
+    let lastIndex = 0;
+    for (const match of value.matchAll(tokenPattern)) {
+      output += escapeHtml(value.slice(lastIndex, match.index));
+      const className = match[1] ? 'sql-comment' : match[2] ? 'sql-string' : match[3] ? 'sql-keyword' : 'sql-number';
+      output += `<span class="${className}">${escapeHtml(match[0])}</span>`;
+      lastIndex = match.index + match[0].length;
+    }
+    output += escapeHtml(value.slice(lastIndex));
+    highlight.innerHTML = `${output}\n`;
+  }
+
+  function getHistory() {
+    try {
+      const history = JSON.parse(localStorage.getItem(historyKey) || '[]');
+      return Array.isArray(history) ? history : [];
+    } catch {
+      return [];
+    }
+  }
+
+  function saveHistory(sql) {
+    const normalized = sql.trim();
+    if (!normalized) return;
+    const history = getHistory().filter(item => item !== normalized);
+    history.unshift(normalized);
+    localStorage.setItem(historyKey, JSON.stringify(history.slice(0, 12)));
+    renderHistory();
+  }
+
+  function renderHistory() {
+    const history = getHistory();
+    historyList.replaceChildren();
+    historyEmpty.hidden = history.length > 0;
+    clearHistory.hidden = history.length === 0;
+    history.forEach(sql => {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.className = 'query-history-item';
+      button.textContent = sql.replace(/\s+/g, ' ');
+      button.title = sql;
+      button.addEventListener('click', () => {
+        input.value = sql;
+        highlightSql(sql);
+        input.focus();
+      });
+      historyList.appendChild(button);
+    });
+  }
+
+  input.addEventListener('input', () => highlightSql(input.value));
+  input.addEventListener('scroll', () => {
+    highlightLayer.scrollTop = input.scrollTop;
+    highlightLayer.scrollLeft = input.scrollLeft;
+  });
+  input.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
+      event.preventDefault();
+      form.requestSubmit();
+    }
+  });
+
+  explainButton.addEventListener('click', () => {
+    const sql = input.value.trim();
+    if (!sql) {
+      input.focus();
+      return;
+    }
+    const prefix = form.dataset.explainPrefix || 'EXPLAIN ';
+    input.value = `${prefix}${sql.replace(/^(EXPLAIN(?:\s+QUERY\s+PLAN)?\s+)/i, '')}`;
+    highlightSql(input.value);
+    form.requestSubmit();
+  });
+
+  clearHistory.addEventListener('click', () => {
+    localStorage.removeItem(historyKey);
+    renderHistory();
+  });
 
   form.addEventListener('submit', async function (event) {
     event.preventDefault();
+    saveHistory(input.value);
     queryId = globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`;
     const body = new URLSearchParams(new FormData(form));
     body.set('queryId', queryId);
@@ -105,5 +225,8 @@
     });
     status.textContent = response.ok ? 'Cancellation requested…' : 'Query already completed.';
   });
+
+  highlightSql(input.value);
+  renderHistory();
 })();
 </script>

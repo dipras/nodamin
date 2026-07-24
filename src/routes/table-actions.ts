@@ -36,9 +36,10 @@ export function registerTableActionRoutes(): void {
       await db.truncateTable(ctx.sessionId!, table);
       redirect(res, tablePath(dbName, table));
     } catch (err: unknown) {
-      const [data, columns] = await Promise.all([
+      const [data, columns, tables] = await Promise.all([
         db.getTableData(ctx.sessionId!, table, 1, 50),
-        db.getTableStructure(ctx.sessionId!, table)
+        db.getTableStructure(ctx.sessionId!, table),
+        db.listTables(ctx.sessionId!)
       ]);
       const primaryKeys = columns.filter((column) => column.key === "PRI").map((column) => column.name);
       sendHtml(res, 200, views.tableDataPage({
@@ -50,6 +51,7 @@ export function registerTableActionRoutes(): void {
         page: 1,
         perPage: 50,
         primaryKeys,
+        tables,
         readOnly: db.isReadOnly(ctx.sessionId),
         error: err instanceof Error ? err.message : String(err),
       }));

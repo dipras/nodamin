@@ -32,6 +32,59 @@
   }
 })();
 
+// Persistent, responsive sidebar toggle
+(function () {
+  const toggle = document.getElementById('sidebar-toggle');
+  const sidebar = document.getElementById('app-sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  if (!toggle || !sidebar || !backdrop) return;
+
+  const desktopKey = 'nodamin-sidebar-collapsed';
+  const mobileKey = 'nodamin-sidebar-mobile-open';
+  const mobile = window.matchMedia('(max-width: 760px)');
+
+  function sync() {
+    const isMobile = mobile.matches;
+    const collapsed = document.documentElement.classList.contains('sidebar-collapsed');
+    const mobileOpen = document.body.classList.contains('sidebar-mobile-open');
+    const expanded = isMobile ? mobileOpen : !collapsed;
+    toggle.setAttribute('aria-expanded', String(expanded));
+    toggle.title = expanded ? 'Close sidebar' : 'Open sidebar';
+    sidebar.inert = !expanded;
+  }
+
+  function restoreMobile() {
+    let open = false;
+    try {
+      open = localStorage.getItem(mobileKey) === 'true';
+    } catch {}
+    document.body.classList.toggle('sidebar-mobile-open', mobile.matches && open);
+    sync();
+  }
+
+  toggle.addEventListener('click', () => {
+    if (mobile.matches) {
+      const open = !document.body.classList.contains('sidebar-mobile-open');
+      document.body.classList.toggle('sidebar-mobile-open', open);
+      try { localStorage.setItem(mobileKey, String(open)); } catch {}
+    } else {
+      const collapsed = !document.documentElement.classList.contains('sidebar-collapsed');
+      document.documentElement.classList.toggle('sidebar-collapsed', collapsed);
+      try { localStorage.setItem(desktopKey, String(collapsed)); } catch {}
+    }
+    sync();
+  });
+
+  backdrop.addEventListener('click', () => {
+    document.body.classList.remove('sidebar-mobile-open');
+    try { localStorage.setItem(mobileKey, 'false'); } catch {}
+    sync();
+  });
+
+  mobile.addEventListener('change', restoreMobile);
+  restoreMobile();
+})();
+
 // Modal & typed confirmation for destructive actions
 function submitDestructiveAction(url, confirmation) {
   const form = document.createElement('form');
@@ -157,3 +210,28 @@ document.addEventListener('keydown', (event) => {
     document.querySelectorAll('.action-menu[open]').forEach((menu) => menu.removeAttribute('open'));
   }
 });
+
+// Position action popovers above cards/tables so they cannot be clipped by siblings.
+document.querySelectorAll('.action-menu').forEach((menu) => {
+  menu.addEventListener('toggle', () => {
+    if (!menu.open) return;
+    document.querySelectorAll('.action-menu[open]').forEach((other) => {
+      if (other !== menu) other.removeAttribute('open');
+    });
+    const summary = menu.querySelector('summary');
+    const popover = menu.querySelector('.action-menu-popover');
+    const rect = summary.getBoundingClientRect();
+    const width = Math.max(150, popover.offsetWidth);
+    const left = Math.min(window.innerWidth - width - 8, Math.max(8, rect.right - width));
+    popover.style.left = `${left}px`;
+    popover.style.top = `${rect.bottom + 5}px`;
+  });
+});
+
+window.addEventListener('resize', () => {
+  document.querySelectorAll('.action-menu[open]').forEach((menu) => menu.removeAttribute('open'));
+});
+
+window.addEventListener('scroll', () => {
+  document.querySelectorAll('.action-menu[open]').forEach((menu) => menu.removeAttribute('open'));
+}, true);

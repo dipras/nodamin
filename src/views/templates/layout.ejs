@@ -5,20 +5,34 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title><%= data.title %> - Nodamin</title>
   <link rel="icon" type="image/x-icon" href="/favicon.ico">
+  <script>
+    try {
+      if (localStorage.getItem('nodamin-sidebar-collapsed') === 'true') {
+        document.documentElement.classList.add('sidebar-collapsed');
+      }
+    } catch {}
+  </script>
   <style><%- data.css %></style>
 </head>
 <body>
   <div class="app">
     <header class="header">
-      <a href="/" class="logo">⚡ Nodamin</a>
+      <button type="button" class="sidebar-toggle" id="sidebar-toggle" aria-controls="app-sidebar"
+        aria-expanded="true" title="Toggle sidebar">
+        <span aria-hidden="true">☰</span>
+        <span class="sr-only">Toggle sidebar</span>
+      </button>
+      <a href="/" class="logo" aria-label="Nodamin home">
+        <span class="logo-mark" aria-hidden="true">N</span>
+        <span>Nodamin</span>
+      </a>
       <nav class="nav">
         <button class="theme-toggle" id="theme-toggle" title="Toggle theme">🌙</button>
       </nav>
     </header>
     <div class="main">
-      <% if (data.sidebar) { %>
-        <aside class="sidebar"><%- data.sidebar %></aside>
-      <% } %>
+      <aside class="sidebar" id="app-sidebar"><%- data.sidebar %></aside>
+      <button type="button" class="sidebar-backdrop" id="sidebar-backdrop" aria-label="Close sidebar"></button>
       <main class="content">
         <% if (data.breadcrumbs && data.breadcrumbs.length) { %>
           <nav class="breadcrumbs" aria-label="Breadcrumb">

@@ -70,11 +70,13 @@ jobs:
       - name: Setup Node for NPM Publish
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # npm trusted publishing requires Node.js >=22.14 and npm >=11.5.1.
+          node-version: 24
           registry-url: 'https://registry.npmjs.org'
 
       - name: Install Dependencies
         run: npm ci
 
       - name: Publish to NPM with Trusted Publishing
-        run: npm publish --provenance --access=public
+        # Trusted publishing adds provenance automatically.
+        run: npm publish --access=public
